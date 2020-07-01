@@ -225,6 +225,7 @@ class PolyhedronClass(object):
     def removeFace(self, old_id):
         target_ind = [abs(face) for face in self.faces].index(abs(old_id))
         self.faces.pop(target_ind)
+
 class Tessellation(object):
     '''Provide path and name of .tess file created with Neper'''
     def __init__(self, tess_file_name, mesh_file_name=None):
@@ -251,6 +252,46 @@ class Tessellation(object):
             self.vertex_id_counter = max(self.vertices.keys())
             self.edge_id_counter = max(self.edges.keys())
 
+    def write_tess(self, mod_tess_file_name = None):
+        if mod_tess_file_name == None:
+            base_name, base_extension= self.tess_file_name.rsplit('.', 1)
+            mod_tess_file_name = base_name+'_mod.'+base_extension
+        with open(mod_tess_file_name, 'w+') as mod_file:
+            #vertex
+            mod_file.write(' **vertex\n')
+            mod_file.write('{}\n'.format(len(self.vertices.keys())))
+            for vert in self.vertices.values():
+                mod_file.write('{} {} {} {} {}\n'.format(vert.id_, *vert.coord, vert.state))
+
+            mod_file.write(' **edge\n')
+            mod_file.write('{}\n'.format(len(self.edges.keys())))
+            for edge in self.edges.values():
+                mod_file.write('{} {} {} {}\n'.format(edge.id_, *edge.verts, edge.state))
+
+            mod_file.write(' **face\n')
+            mod_file.write('{}\n'.format(len(self.faces.keys())))
+            for face in self.faces.values():
+                mod_file.write('{} \n'.format(face.id_))
+                face_edge_line='{}'.format(len(face.edges))
+                for edge in face.edges:
+                    face_edge_line += ' {}'.format(edge)
+                face_edge_line += '\n'
+                mod_file.write(face_edge_line)
+                mod_file.write('\n')
+                mod_file.write('\n')
+
+            mod_file.write(' **polyhedron\n')
+            mod_file.write('{}\n'.format(len(self.polyhedrons.keys())))
+            for poly in self.polyhedrons.values():
+                poly_face_line = '{} {}'.format(poly.id_, len(poly.faces))
+                for face in poly.faces:
+                    poly_face_line += ' {}'.format(face)
+                poly_face_line += '\n'
+                mod_file.write(poly_face_line)
+
+            #polyhedron
+            if self.periodic == True:
+                pass
 
     def get_vertices(self):
         vertices={}
