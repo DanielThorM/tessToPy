@@ -303,7 +303,7 @@ class Tessellation(object):
                              [1, 1, 1],
                              [1, 0, 1]]
             for i, dom_bin in enumerate(domain_binaries):
-                mod_file.write('{} {} {} {}\n'.format(i+1, *self.domain_size*dom_bin))
+                mod_file.write('{} {} {} {} none\n'.format(i+1, *self.domain_size*dom_bin))
                 mod_file.write('\n')
 
 
