@@ -289,9 +289,51 @@ class Tessellation(object):
                 poly_face_line += '\n'
                 mod_file.write(poly_face_line)
 
+            mod_file.write(' **domain\n')
+            mod_file.write('  *general\n')
+            mod_file.write('   cube\n')
+            mod_file.write('  *vertex\n')
+            mod_file.write('{}\n'.format(8))
+            domain_binaries = [[0, 0, 0],
+                             [1, 0, 0],
+                             [1, 1, 0],
+                             [0, 1, 0],
+                             [0, 0, 1],
+                             [0, 1, 1],
+                             [1, 1, 1],
+                             [1, 0, 1]]
+            for i, dom_bin in enumerate(domain_binaries):
+                mod_file.write('{} {} {} {}\n'.format(i+1, *self.domain_size*dom_bin))
+                mod_file.write('\n')
+
+
             #polyhedron
             if self.periodic == True:
-                pass
+                mod_file.write(' **periodicity\n')
+                def write_periodicity(per_list, slave_block_len):
+                    mod_file.write('{}\n'.format(len(per_list)))
+                    for per in per_list:
+                        for i in range(0, len(per.slave_to), slave_block_len):
+                            write_line='{} '*slave_block_len
+                            write_line += '{}\n'
+                            mod_file.write(write_line.format(per.id_, per.slave_to[i], *per.slave_to[i + 1:i + slave_block_len]))
+
+                mod_file.write('  *vertex\n')
+                #Number of periodic vertices
+                per_list = [per for per in self.vertices.values() if per.slave_to != []]
+                write_periodicity(per_list, 4)
+
+                mod_file.write('  *edge\n')
+                per_list = [per for per in self.edges.values() if per.slave_to != []]
+                write_periodicity(per_list, 5)
+
+                mod_file.write('  *face\n')
+                per_list = [per for per in self.faces.values() if per.slave_to != []]
+                write_periodicity(per_list, 5)
+
+            mod_file.write('***end')
+
+
 
     def get_vertices(self):
         vertices={}
