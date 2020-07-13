@@ -1151,7 +1151,7 @@ class Tessellation(object):
             return self.mesh_file_name
 
     def mesh2D(self, elem_size, mesh_type=None, recombine=True, mesh_file_name=None,
-               corner_refine_factor=2., mesh_algo=8, recomb_algo=0):
+               corner_refine_factor=2., mesh_algo=8, recomb_algo=0, second_order=False):
         self.gmsh=[]
         if mesh_type==None:
             self.gmsh.append('Field[1] = MathEval;\n')
@@ -1172,6 +1172,9 @@ class Tessellation(object):
             self.gmsh.append('Mesh.CharacteristicLengthExtendFromBoundary = 0;\n')
             self.gmsh.append('Mesh.CharacteristicLengthFromPoints = 0;\n')
             self.gmsh.append('Mesh.CharacteristicLengthFromCurvature = 0;\n')
+        if second_order == True:
+            self.gmsh.append('Mesh.ElementOrder = 2;\n')
+            #self.gmsh.append('Mesh.SecondOrderLinear = {};\n'.format(int(second_order)))
         self.gmsh.append('Mesh.Algorithm = {};\n'.format(mesh_algo)) #6
         self.gmsh.append('Mesh.Smoothing = 3;\n')
         if recombine==True:
