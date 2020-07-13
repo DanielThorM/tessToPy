@@ -1172,9 +1172,6 @@ class Tessellation(object):
             self.gmsh.append('Mesh.CharacteristicLengthExtendFromBoundary = 0;\n')
             self.gmsh.append('Mesh.CharacteristicLengthFromPoints = 0;\n')
             self.gmsh.append('Mesh.CharacteristicLengthFromCurvature = 0;\n')
-        if second_order == True:
-            self.gmsh.append('Mesh.ElementOrder = 2;\n')
-            #self.gmsh.append('Mesh.SecondOrderLinear = {};\n'.format(int(second_order)))
         self.gmsh.append('Mesh.Algorithm = {};\n'.format(mesh_algo)) #6
         self.gmsh.append('Mesh.Smoothing = 3;\n')
         if recombine==True:
@@ -1182,6 +1179,9 @@ class Tessellation(object):
             self.gmsh.append('Recombine Surface {:};\n')
             self.gmsh.append('Recombine Surface {:};\n')
             self.gmsh.append('Mesh.Smoothing = 3;\n')
+        if second_order == True:
+            self.gmsh.append('Mesh.ElementOrder = 2;\n')
+            self.gmsh.append('Mesh.SecondOrderIncomplete = 1;\n')
         self.write_geo(mesh_file_name)
         subprocess.run('gmsh {}'.format(self.mesh_file_name.rsplit('.',1)[0])+'.geo -2 -nt 2 -format key')
         return self.mesh_file_name.rsplit('.')[0]+'.key'
