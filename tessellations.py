@@ -211,7 +211,7 @@ class FaceClass(object):
         self.edges[replaceInd] = int(sign* new_id)
 
     def reverse(self):
-        temp = FaceClass(id_=-self.id_, edges=[-1 * edge for edge in self.edges[::-1]], state = self.state)
+        temp = FaceClass(edge_dict=self.edge_dict, id_=-self.id_, edges=[-1 * edge for edge in self.edges[::-1]], state = self.state)
         temp.master_to = self.master_to
         temp.slave_to  = self.slave_to
         temp.parents = self.parents
@@ -225,6 +225,10 @@ class PolyhedronClass(object):
     def removeFace(self, old_id):
         target_ind = [abs(face) for face in self.faces].index(abs(old_id))
         self.faces.pop(target_ind)
+
+    def replace_face(self, old_id, new_id):
+        target_ind = [abs(face) for face in self.faces].index(abs(old_id))
+        self.faces[target_ind] = new_id
 
 class Tessellation(object):
     '''Provide path and name of .tess file created with Neper'''
@@ -686,10 +690,20 @@ class Tessellation(object):
                     for duplicate_edge_set in duplicate_edge_sets: #duplicateEdgeSet = duplicateEdgeSets[0]
                         coalesced_edges.append(self.resolve_duplicate_edges(duplicate_edge_set)) # coalescedEdges.append(newEdgeID)
 
+        collapsed_polyhedrons=[]
         for collapsed_faces_pr_edge in collapsed_faces_list:
             if collapsed_faces_pr_edge != []:
                 for collapsed_face in collapsed_faces_pr_edge: #collapsedFace=820
-                    coalesced_edges.append(self.delete_face_to_edge(collapsed_face, print_trigger))
+                    temp_edge, col_poly = self.delete_face_to_edge(collapsed_face, print_trigger)
+                    coalesced_edges.append(temp_edge)
+                    if col_poly != []:
+                        #collapsed_polyhedrons.append(col_poly[0])
+                        #if collapsed_polyhedrons != []:
+                            #for polyhedron in collapsed_polyhedrons:
+                        self.collapse_polyhedron(col_poly[0])
+                            #self.find_parents()
+
+
 
         for vertex in deleted_verts_list:
             if vertex in new_vertex_list:
@@ -822,10 +836,24 @@ class Tessellation(object):
             print('Suggested face for deletion: face {}'.format(collapsed_face))
             print('Coalesced edges {},{} to edge: {}'.format(abs(rem_edges[0]), abs(rem_edges[1]), new_edge_id))
 
+        collapsed_poly = []
+        for poly_parent in self.faces[abs(collapsed_face)].parents:
+            if len(self.polyhedrons[poly_parent].faces) <= 2:
+                collapsed_poly.append(poly_parent)
         del self.faces[abs(collapsed_face)]
         del self.edges[abs(rem_edges[0])]
         del self.edges[abs(rem_edges[1])]
-        return new_edge_id
+
+        return new_edge_id, collapsed_poly
+
+    def collapse_polyhedron(self, poly_parent):
+        rem_face, del_face = map(abs,self.polyhedrons[poly_parent].faces)
+        for edge in self.faces[del_face].edges:
+            self.edges[edge].parents.remove(del_face)
+        for polyhedron in self.faces[del_face].parents:
+            self.polyhedrons[polyhedron].replace_face(del_face, rem_face)
+        del self.faces[abs(del_face)]
+        del self.polyhedrons[poly_parent]
 
     def update_vertex_location(self, vertex, new_vertex_loc):
         if self.periodic == False: raise Exception('Invalid action for current tesselation')
@@ -1235,10 +1263,10 @@ class Tessellation(object):
         fig.tight_layout()
 
 
-#folderName = r'H:\thesis\periodic\representative\S05R1\ID1'
+#folderName = r'H:\thesis\periodic\foam_ae\S10R1\ID1'
 #mesh_file_name = folderName + r'\\test'
 #self = Tessellation(folderName + r'\\nfrom_morpho-id1.tess')
-#self.regularize(n=int(len(self.edges.keys())/2))
+#self.regularize(n=int(len(self.edges.keys())))
 #self.mesh_file_name=mesh_file_name
 #self.mesh2D(elem_size=0.02)
 #tessellation=self
