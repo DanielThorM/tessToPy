@@ -1265,8 +1265,8 @@ class Tessellation(object):
 
 #folderName = r'H:\thesis\periodic\foam_ae\S10R1\ID1'
 #mesh_file_name = folderName + r'\\test'
-#self = Tessellation(folderName + r'\\nfrom_morpho-id1.tess')
-#self.regularize(n=int(len(self.edges.keys())))
+self = Tessellation(os.getcwd()+r'\\tests\\n10-id1.tess')
+self.regularize(n=1)
 #self.mesh_file_name=mesh_file_name
 #self.mesh2D(elem_size=0.02)
 #tessellation=self
