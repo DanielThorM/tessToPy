@@ -1,10 +1,12 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import copy
 import sys
 sys.path.insert(0, '../tessToPy/')
 from absdict import *
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+
 class Vertex(object):
     def __init__(self, id_, coord):
         self.id_ = id_
@@ -76,7 +78,10 @@ class Edge(object):
         self.remove_slave(old_slave)
         self.add_slave(new_slave)
 
-    def replace_vertex(self, old_vertex, new_vertex):
+    def replace_vertex(self, new_vertex, old_vertex):
+        #does not work for negative edge
+        if np.sign(self.id_) == -1:
+            raise Exception ('Can not alter reversed edge')
         if self.verts[0].id_ == old_vertex.id_:
             self.verts[0]= new_vertex
         elif self.verts[1].id_ == old_vertex.id_:
@@ -96,11 +101,19 @@ class Edge(object):
         return periodicity
 
     def direction_relative_to_master(self):
-        vect_sum = self.vector() + self.master.vector()
+        if self.master == None:
+            return 1
+        else:
+            return self.direction_relative_to_other(self.master)
+
+    def direction_relative_to_other(self, edge):
+        vect_sum = self.vector() + edge.vector()
         if np.all(np.isclose(vect_sum, np.array([0,0,0]))):
             return -1
-        else:
+        elif np.all(np.isclose(vect_sum, 2*self.vector())):
             return 1
+        else:
+            raise Exception('Edges not collinear')
 
     def x0(self):
         return self.verts[0].coord
@@ -114,21 +127,44 @@ class Edge(object):
     def xm(self):
         return (self.x0()+self.x1())/2
 
+    def reverse(self):
+        #temp = Edge(id_=-self.id_, verts=[])
+        #temp.verts = [self.verts[1], self.verts[0]]
+        #temp.slaves=self.slaves
+        #temp.master=self.master
+        #temp.part_of= self.part_of
+        if np.sign(self.id_) == -1:
+            return self._wrapped_obj
+        else:
+            return reversedEdge(self)
+
     def length(self):
         return np.linalg.norm(self.vector())
-
-    def reverse(self):
-        temp = Edge(id_=-self.id_, verts=self.verts[::-1])
-        temp.slaves= self.slaves
-        temp.master= self.master
-        temp.part_of = self.part_of
-        return temp
 
     def plot(self, ax=None, color='k', **kwargs):
         if ax == None:
             fig = plt.figure()
             ax = fig.add_subplot(111, projection='3d')
         ax.plot(*np.array([self.x0(), self.x1()]).swapaxes(0, 1), color=color, **kwargs)
+
+class reversedEdge(Edge):
+    '''Every time an attribute is called, the current instance is copied and reversed,
+            # returning only the reversed result of the attribute'''
+    def __init__(self, obj):
+        # wrap the object
+        self._wrapped_obj = obj
+    def __getattr__(self, attr):
+        # see if this object has attr
+        # NOTE do not use hasattr, it goes into
+        # infinite recurrsion
+        temp = copy.copy(self._wrapped_obj)
+        temp.id_ = -temp.id_
+        temp.verts = temp.verts[::-1]
+        if attr in self.__dict__:
+            # this object has it
+            return getattr(self, attr)
+        return getattr(temp, attr)
+
 
 class Face(object):
     def __init__(self, id_, edges):
@@ -158,7 +194,7 @@ class Face(object):
     def barycenter(self):
         return np.array([vert.coord for vert in self.verts_in_face()]).mean(axis=0)
 
-    def find_face_eq(self):
+    def face_eq(self):
         barycenter = self.barycenter()
         vectors = []
         for edge in self.edges: #edgeID=self.edges[1]
@@ -171,7 +207,7 @@ class Face(object):
         face_eq_d = np.dot(averaged_vector, barycenter)
         return np.array([face_eq_d, averaged_vector[0], averaged_vector[1], averaged_vector[2]])
 
-    def find_angle_deviation(self):
+    def angle_deviation(self):
         vectors=[]
         barycenter=self.barycenter()
         for edge in self.edges:
@@ -204,17 +240,38 @@ class Face(object):
 
     def replace_edge(self, new_edge, old_edge):
         replace_ind = [abs(edge.id_) for edge in self.edges].index(abs(old_edge.id_))
-        if (self.edges[replace_ind].vector/new_edge.vector())[0] == -1.0:
+        if new_edge.direction_relative_to_other(old_edge) == -1.0:
             self.edges[replace_ind] = new_edge.reverse()
-        else:
+        elif new_edge.direction_relative_to_other(old_edge) == 1.0:
             self.edges[replace_ind] = new_edge
+        else:
+            raise Exception('Edges not collinear')
 
     def reverse(self):
-        temp = Face(id_=-self.id_, edges=[edge.reverse() for edge in self.edges[::-1]])
-        temp.master = self.master
-        temp.slaves  = self.slaves
-        temp.part_of = self.part_of
-        return temp
+        if np.sign(self.id_) == -1:
+            return self._wrapped_obj
+        else:
+            return reversedFace(self)
+
+    def area(self):
+        barycenter = self.barycenter()
+        area = 0
+        for edge in self.edges:
+            v1 = edge.x0() - barycenter
+            v2 = edge.x1() - barycenter
+            v_cross = np.cross(v1, v2)
+            part_area = np.linalg.norm(v_cross)/2
+            area += part_area
+        return area
+
+    def direction_relative_to_other(self, face):
+        if np.all(np.isclose(face.face_eq(), -1*self.face_eq())):
+            return -1
+        elif np.all(np.isclose(face.face_eq(), self.face_eq())):
+            return 1
+        else:
+            raise Exception('Faces not equal')
+
 
     def plot(self, ax = None, color = 'k', normal_vector = False):
         if ax == None:
@@ -231,8 +288,41 @@ class Face(object):
                 *self.find_face_eq()[1:],  # <-- directions of vector
                 color='red', alpha=.8, lw=3)
 
+class reversedFace(Face):
+    def __init__(self, obj):
+        '''Every time an attribute is called, the current instance is copied and reversed,
+        # returning only the reversed result of the attribute'''
+        self._wrapped_obj = obj
+
+    def __getattr__(self, attr):
+        # see if this object has attr
+        # NOTE do not use hasattr, it goes into
+        # infinite recurrsion
+        temp = copy.copy(self._wrapped_obj)
+        temp.id_ = -temp.id_
+        temp.edges = [edge.reverse() for edge in temp.edges[::-1]]
+        if attr in self.__dict__:
+            #this object has it
+            return getattr(self, attr)
+        return getattr(temp, attr)
+
 class Polyhedron(object):
-    pass
+    def __init__(self, id_, faces):
+        self.id_ = id_
+        self.faces=faces
+        self.master = None
+        self.slaves = []
+        self.part_of = []
+
+    def remove_face(self, old_face):
+        self.faces.remove(old_face)
+
+    def replace_face(self, new_face, old_face):
+        replace_ind = [abs(face.id_) for face in self.faces].index(abs(old_face.id_))
+        if new_face.direction_relative_to_other(old_face) == -1:
+            self.faces[replace_ind] = new_face.reverse()
+        elif new_face.direction_relative_to_other(old_face) == 1:
+            self.faces[replace_ind] = new_face
 
 class PolyhedronOld(object):
     def __init__(self, face_dict, id_, faces):
@@ -273,4 +363,5 @@ if __name__ == "__main__":
     faces[0].add_slave(faces[2])
     faces[3].add_slave(faces[3])
     faces[4].add_slave(faces[5])
-    self = faces[0]
+    face = faces[1]
+

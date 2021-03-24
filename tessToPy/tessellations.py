@@ -337,8 +337,6 @@ class Tessellation(object):
 
             mod_file.write('***end')
 
-
-
     def get_vertices(self):
         vertices={}
         start_ind=self.lines.index(' **vertex\n')
