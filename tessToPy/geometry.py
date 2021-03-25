@@ -7,6 +7,13 @@ from absdict import *
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
+class PeriodicComponent(object):
+    def __init__(self, id_):
+        self.id_ = id_
+        self.slaves = []
+        self.master = None
+        self.part_of = []
+
 class Vertex(object):
     def __init__(self, id_, coord):
         self.id_ = id_
