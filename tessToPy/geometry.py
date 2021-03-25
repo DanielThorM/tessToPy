@@ -75,12 +75,18 @@ class PeriodicCompositComponent(PeriodicComponent):
         else:
             return self.direction_relative_to_other(self.master)
 
-class reversedPCC(object):
+class reversedPCC(PeriodicCompositComponent):
     '''Every time an attribute is called, the supplied instance is copied and reversed,
         returning only the reversed result of the attribute'''
 
     def __init__(self, org_component):
         self.org_comp = org_component
+
+    def __repr__(self):
+        temp = copy.copy(self.org_comp)
+        temp.id_ = -temp.id_
+        '''Returns representation of the object'''
+        return temp.__repr__()
 
     def __getattr__(self, attr):
         temp = copy.copy(self.org_comp)
@@ -120,6 +126,7 @@ class Vertex(PeriodicComponent):
 class Edge(PeriodicCompositComponent):
     def __init__(self, id_, parts):
         super().__init__(id_, parts)
+
     def __repr__(self):
         return f"Edge({self.id_})"
 
@@ -222,9 +229,9 @@ class Face(PeriodicCompositComponent):
         return area
 
     def direction_relative_to_other(self, face):
-        if np.all(np.isclose(face.face_eq(), -1*self.face_eq())):
+        if np.all(np.isclose(face.face_eq()[1:], -1*self.face_eq()[1:])):
             return -1
-        elif np.all(np.isclose(face.face_eq(), self.face_eq())):
+        elif np.all(np.isclose(face.face_eq()[1:], self.face_eq()[1:])):
             return 1
         else:
             raise Exception('Faces not equal')
@@ -281,6 +288,15 @@ class Polyhedron(PeriodicCompositComponent):
                 poly_volume += volume_tet(coords)
         return poly_volume
 
+    def area(self):
+        poly_area = 0
+        for face in self.parts:
+            poly_area += face.area()
+        return poly_area
+
+    def sphericity(self):
+        return equivalent_surface_area(self.volume())/self.area()
+
 def volume_tet(coords):
     v1 = coords[1] - coords[0]
     v2 = coords[2] - coords[0]
@@ -292,7 +308,14 @@ def area_tri(coords):
     v2 = coords[2] - coords[0]
     return np.abs(np.linalg.norm(np.cross(v1, v2))) / 2.0
 
+def equivalent_surface_area(volume):
+    return surface_area_sphere(equivalent_radius(volume))
 
+def equivalent_radius(volume):
+    return np.cbrt((3/4)*volume/np.pi)
+
+def surface_area_sphere(radius):
+    return 4*np.pi*radius**2
 
 if __name__ == "__main__":
     coords = [[0,0,0], [1,0,0], [1,1,0], [0,1,0], [0,0,1],  [1,0,1], [1,1,1], [0,1,1]]

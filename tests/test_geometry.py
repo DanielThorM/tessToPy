@@ -1,10 +1,6 @@
 import unittest
 import numpy as np
 import copy
-#import sys, os
-#testdir = os.path.dirname(__file__)
-#srcdir = '../tessToPy/tessToPy'
-#sys.path.insert(0, os.path.abspath(os.path.join(testdir, srcdir)))
 import tessToPy.geometry as tg
 import tessToPy.tessIO as tio
 
@@ -15,6 +11,7 @@ class TestTessIO(unittest.TestCase):
         self.verts = tio.get_verts(self.lines)
         self.edges = tio.get_edges(self.lines, self.verts)
         self.faces = tio.get_faces(self.lines, self.edges)
+        self.polyhedrons = tio.get_polyhedrons(self.lines, self.faces)
         tio.get_periodicity(self.lines, self.verts, self.edges, self.faces)
 
     def test_read_verts(self):
@@ -53,6 +50,19 @@ class TestTessIO(unittest.TestCase):
         self.assertEqual(set(face_edges_id_), set(test_face_edges_id_))
         self.assertEqual(num_faces, len(self.faces))
 
+    def test_read_polys(self):
+        start_ind = start_ind = self.lines.index(' **polyhedron\n')
+        poly = self.polyhedrons[1]
+        num_polys = int(self.lines[start_ind + 1])
+        i = 0
+        polyhedron_line_ind = start_ind + 2 + i
+        id_ = int(self.lines[polyhedron_line_ind].split()[0])
+        poly_faces = [fid_ for fid_ in map(int, self.lines[polyhedron_line_ind].split()[2:])]
+        test_poly_faces = [face.id_ for face in poly.parts]
+        self.assertEqual(set(test_poly_faces), set(poly_faces))
+        self.assertEqual(id_, poly.id_)
+        self.assertEqual(num_polys, len(self.polyhedrons))
+
     def test_read_periodicity(self):
         periodicity_start_ind = self.lines.index(' **periodicity\n')
         face_start_ind = periodicity_start_ind + self.lines[periodicity_start_ind:].index('  *face\n')
@@ -67,7 +77,6 @@ class TestTessIO(unittest.TestCase):
         test_domain_size = tio.get_domain_size(self.lines)
         domain_size = self.domain_size
         self.assertIsNone(np.testing.assert_allclose(test_domain_size, domain_size))
-
 
 class TestVertex(unittest.TestCase):
     def setUp(self):
@@ -177,13 +186,13 @@ class TestEdge(unittest.TestCase):
         self.assertEqual(set(slaves), set(rev_slaves))
         self.assertEqual(self.edges[115].master.id_, self.edges[-115].master.id_)
 
-
 class TestFace(unittest.TestCase):
     def setUp(self):
         self.lines = tio.read_tess('../tests/n10-id1.tess')
         self.verts = tio.get_verts(self.lines)
         self.edges = tio.get_edges(self.lines, self.verts)
         self.faces = tio.get_faces(self.lines, self.edges)
+        tio.get_periodicity(self.lines, self.verts, self.edges, self.faces)
     def test_face_eq(self):
         start_ind = start_ind = self.lines.index(' **face\n')
         num_faces = int(self.lines[start_ind + 1])
@@ -226,12 +235,74 @@ class TestFace(unittest.TestCase):
     def test_remove_edge(self):
         face = self.faces[1]
         org_edge_id = face.parts[0].id_
-        face_copy = copy.deepcopy(face)
+        face_copy = copy.copy(face)
         face_copy.remove_part(self.edges[org_edge_id])
-        set([edge.id_ for edge in face.parts])-set([org_edge_id])
-        set([edge.id_ for edge in face_copy.parts])
+        face_list = set([edge.id_ for edge in face.parts])-set([org_edge_id])
+        test_face_list = set([edge.id_ for edge in face_copy.parts])
+        self.assertEqual(face_list, test_face_list)
+
+    def test_periodicity(self):
+        face = self.faces[5].slaves[0]
+        periodicity = np.array([0,0,1])
+        test_periodicity = face.periodicity_to_master()
+        self.assertIsNone(np.testing.assert_allclose(periodicity, test_periodicity))
+
+    def test_direction_relative_to_master(self):
+        face = self.faces[5].slaves[0]
+        test_direction_relative_to_master = face.direction_relative_to_master()
+        direction_relative_to_master = -1
+        self.assertEqual(direction_relative_to_master, test_direction_relative_to_master)
+
+    def test_distance_to_master(self):
+        face = self.faces[5].slaves[0]
+        vector_to_master = self.faces[5].xm() - face.xm()
+        test_vector_to_master = face.vector_to_master()
+        self.assertIsNone(np.testing.assert_allclose(vector_to_master, test_vector_to_master))
+
+class TestPolyhedron(unittest.TestCase):
+    def setUp(self):
+        self.lines = tio.read_tess('../tests/n10-id1.tess')
+        self.verts = tio.get_verts(self.lines)
+        self.edges = tio.get_edges(self.lines, self.verts)
+        self.faces = tio.get_faces(self.lines, self.edges)
+        self.polyhedrons = tio.get_polyhedrons(self.lines, self.faces)
+        tio.get_periodicity(self.lines, self.verts, self.edges, self.faces)
+
+    def test_volume(self):
+        volume = 0.07928624408155101 #Face 1
+        test_volume = self.polyhedrons[1].volume()
+        self.assertIsNone(np.testing.assert_allclose(volume, test_volume))
+
+    def test_area(self):
+        area = 1.1063351901193357
+        test_area = self.polyhedrons[1].area()
+        self.assertIsNone(np.testing.assert_allclose(area, test_area))
 
 
+    def test_sphericity(self):
+        sphericity = 0.8067320195905399
+        test_sphericity = self.polyhedrons[1].sphericity()
+        self.assertIsNone(np.testing.assert_allclose(sphericity, test_sphericity))
+
+    def test_face_replace(self):
+        poly = self.polyhedrons[1]
+        org_face_id = poly.parts[0].id_
+        org_volume = poly.volume()
+        new_face = copy.copy(poly.parts[0])
+        new_face = new_face.reverse()
+        poly.replace_part(new_face, poly.parts[0])
+        test_volume = poly.volume()
+        self.assertIsNone(np.testing.assert_allclose(org_volume, test_volume))
+        poly.replace_part(self.faces[org_face_id], new_face)
+
+    def test_remove_face(self):
+        poly = self.polyhedrons[1]
+        org_face_id = poly.parts[0].id_
+        poly_copy = copy.copy(poly)
+        poly_copy.remove_part(self.edges[org_face_id])
+        poly_list = set([edge.id_ for edge in poly.parts])-set([org_face_id])
+        test_poly_list = set([edge.id_ for edge in poly_copy.parts])
+        self.assertEqual(poly_list, test_poly_list)
 
 if __name__ == '__main__':
     unittest.main()

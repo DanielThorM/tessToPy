@@ -42,15 +42,15 @@ def get_faces(lines, edges):
     return faces
 
 
-def get_polyhedrons(self):
+def get_polyhedrons(lines, faces):
     polyhedrons = {}
-    start_ind = self.lines.index(' **polyhedron\n')
-    n_polyhedrons = int(self.lines[start_ind + 1])
+    start_ind = lines.index(' **polyhedron\n')
+    n_polyhedrons = int(lines[start_ind + 1])
     for i in range(n_polyhedrons):
         polyhedron_line_ind = start_ind + 2 + i
-        id_ = int(self.lines[polyhedron_line_ind].split()[0])
-        poly_faces = list(map(int, self.lines[polyhedron_line_ind].split()[2:]))
-        polyhedrons[id_] = PolyhedronClass(self.faces, id_=id_, parts=poly_faces)
+        id_ = int(lines[polyhedron_line_ind].split()[0])
+        poly_faces = [faces[fid_] for fid_ in map(int,lines[polyhedron_line_ind].split()[2:])]
+        polyhedrons[id_] = Polyhedron(id_=id_, parts=poly_faces)
     return polyhedrons
 
 def get_periodicity(lines, verts, edges, faces):
@@ -92,5 +92,6 @@ if __name__ == "__main__":
     verts = get_verts(lines)
     edges = get_edges(lines, verts)
     faces = get_faces(lines, edges)
+    polyhedrons = get_polyhedrons(lines, faces)
     get_periodicity(lines, verts, edges, faces)
-    domain_size = get_domain_size
+    domain_size = get_domain_size(lines)
