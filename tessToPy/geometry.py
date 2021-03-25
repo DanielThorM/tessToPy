@@ -134,7 +134,7 @@ class Edge(object):
         #temp.master=self.master
         #temp.part_of= self.part_of
         if np.sign(self.id_) == -1:
-            return self._wrapped_obj
+            return self.org_edge
         else:
             return reversedEdge(self)
 
@@ -150,21 +150,16 @@ class Edge(object):
 class reversedEdge(Edge):
     '''Every time an attribute is called, the current instance is copied and reversed,
             # returning only the reversed result of the attribute'''
-    def __init__(self, obj):
-        # wrap the object
-        self._wrapped_obj = obj
+    def __init__(self, edge):
+        self.org_edge = edge
     def __getattr__(self, attr):
-        # see if this object has attr
-        # NOTE do not use hasattr, it goes into
-        # infinite recurrsion
-        temp = copy.copy(self._wrapped_obj)
+        temp = copy.copy(self.org_edge)
         temp.id_ = -temp.id_
         temp.verts = temp.verts[::-1]
         if attr in self.__dict__:
             # this object has it
             return getattr(self, attr)
         return getattr(temp, attr)
-
 
 class Face(object):
     def __init__(self, id_, edges):
@@ -236,20 +231,21 @@ class Face(object):
         return [self.edges[max_angle_ind+max_bary_ind], max_angle]
 
     def remove_edge(self, old_edge):
-        self.edges.remove(old_edge)
+        del_ind = [abs(edge.id_) for edge in self.edges].index(abs(old_edge.id_))
+        del self.edges[del_ind]
 
     def replace_edge(self, new_edge, old_edge):
         replace_ind = [abs(edge.id_) for edge in self.edges].index(abs(old_edge.id_))
-        if new_edge.direction_relative_to_other(old_edge) == -1.0:
+        if new_edge.direction_relative_to_other(self.edges[replace_ind]) == -1.0:
             self.edges[replace_ind] = new_edge.reverse()
-        elif new_edge.direction_relative_to_other(old_edge) == 1.0:
+        elif new_edge.direction_relative_to_other(self.edges[replace_ind]) == 1.0:
             self.edges[replace_ind] = new_edge
         else:
             raise Exception('Edges not collinear')
 
     def reverse(self):
         if np.sign(self.id_) == -1:
-            return self._wrapped_obj
+            return self.org_face
         else:
             return reversedFace(self)
 
@@ -257,11 +253,10 @@ class Face(object):
         barycenter = self.barycenter()
         area = 0
         for edge in self.edges:
-            v1 = edge.x0() - barycenter
-            v2 = edge.x1() - barycenter
-            v_cross = np.cross(v1, v2)
-            part_area = np.linalg.norm(v_cross)/2
-            area += part_area
+            coords = np.array([barycenter,
+                               edge.x0(),
+                               edge.x1()])
+            area += area_tri(coords)
         return area
 
     def direction_relative_to_other(self, face):
@@ -289,16 +284,16 @@ class Face(object):
                 color='red', alpha=.8, lw=3)
 
 class reversedFace(Face):
-    def __init__(self, obj):
+    def __init__(self, face):
         '''Every time an attribute is called, the current instance is copied and reversed,
         # returning only the reversed result of the attribute'''
-        self._wrapped_obj = obj
+        self.org_face = face
 
     def __getattr__(self, attr):
         # see if this object has attr
         # NOTE do not use hasattr, it goes into
         # infinite recurrsion
-        temp = copy.copy(self._wrapped_obj)
+        temp = copy.copy(self.org_face)
         temp.id_ = -temp.id_
         temp.edges = [edge.reverse() for edge in temp.edges[::-1]]
         if attr in self.__dict__:
@@ -310,33 +305,50 @@ class Polyhedron(object):
     def __init__(self, id_, faces):
         self.id_ = id_
         self.faces=faces
-        self.master = None
-        self.slaves = []
-        self.part_of = []
 
     def remove_face(self, old_face):
-        self.faces.remove(old_face)
+        del_ind = [abs(face.id_) for face in self.faces].index(abs(old_face.id_))
+        del self.faces[del_ind]
 
     def replace_face(self, new_face, old_face):
         replace_ind = [abs(face.id_) for face in self.faces].index(abs(old_face.id_))
-        if new_face.direction_relative_to_other(old_face) == -1:
+        if new_face.direction_relative_to_other(self.faces[replace_ind]) == -1:
             self.faces[replace_ind] = new_face.reverse()
-        elif new_face.direction_relative_to_other(old_face) == 1:
+        elif new_face.direction_relative_to_other(self.faces[replace_ind]) == 1:
             self.faces[replace_ind] = new_face
 
-class PolyhedronOld(object):
-    def __init__(self, face_dict, id_, faces):
-        self.face_dict = face_dict
-        self.id_ = id_
-        self.faces = faces
+    def barycenter(self):
+        verts = []
+        for face in self.faces:
+            verts.extend(face.verts_in_face())
+        unique_verts = set(verts)
+        coords = np.array([vert.coord for vert in unique_verts])
+        return np.mean(coords, axis=0)
 
-    def removeFace(self, old_id):
-        target_ind = [abs(face) for face in self.faces].index(abs(old_id))
-        self.faces.pop(target_ind)
+    def volume(self):
+        poly_volume = 0
+        poly_barycenter = self.barycenter()
+        for face in self.faces:
+            face_barycenter = face.barycenter()
+            for edge in face.edges:
+                coords = np.array([poly_barycenter,
+                                   face_barycenter,
+                                   edge.x0(),
+                                   edge.x1()])
+                poly_volume += volume_tet(coords)
 
-    def replace_face(self, old_id, new_id):
-        target_ind = [abs(face) for face in self.faces].index(abs(old_id))
-        self.faces[target_ind] = new_id
+def volume_tet(coords):
+    v1 = coords[1] - coords[0]
+    v2 = coords[2] - coords[0]
+    v3 = coords[3] - coords[0]
+    return np.abs(np.dot(np.cross(v1, v2), v3)) / 6.0
+
+def area_tri(coords):
+    v1 = coords[1] - coords[0]
+    v2 = coords[2] - coords[0]
+    return np.abs(np.linalg.norm(np.cross(v1, v2))) / 2.0
+
+
 
 if __name__ == "__main__":
     coords = [[0,0,0], [1,0,0], [1,1,0], [0,1,0], [0,0,1],  [1,0,1], [1,1,1], [0,1,1]]
@@ -364,4 +376,5 @@ if __name__ == "__main__":
     faces[3].add_slave(faces[3])
     faces[4].add_slave(faces[5])
     face = faces[1]
+    self = Polyhedron(id_=1, faces = list(faces.values()))
 

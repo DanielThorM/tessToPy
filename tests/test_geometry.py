@@ -1,5 +1,6 @@
 import unittest
 import numpy as np
+import copy
 #import sys, os
 #testdir = os.path.dirname(__file__)
 #srcdir = '../tessToPy/tessToPy'
@@ -209,6 +210,26 @@ class TestFace(unittest.TestCase):
         face_eq = face.face_eq()
         test_face_eq = test_face_rev.face_eq()
         self.assertIsNone(np.testing.assert_allclose(face_eq, -1*test_face_eq))
+
+    def test_edge_replace(self):
+        face = self.faces[1]
+        org_face_eq = face.face_eq()
+        org_edge_id = face.edges[0].id_
+        edge_copy = copy.copy(self.edges[org_edge_id])
+        edge_copy.id_ = 9999
+        edge_copy = edge_copy.reverse()
+        face.replace_edge(edge_copy, face.edges[0])
+        new_face_eq = face.face_eq()
+        face.replace_edge(self.edges[org_edge_id], edge_copy)
+        self.assertIsNone(np.testing.assert_allclose(org_face_eq, new_face_eq))
+
+    def test_remove_edge(self):
+        face = self.faces[1]
+        org_edge_id = face.edges[0].id_
+        face_copy = copy.deepcopy(face)
+        face_copy.remove_edge(self.edges[org_edge_id])
+        set([edge.id_ for edge in face.edges])-set([org_edge_id])
+        set([edge.id_ for edge in face_copy.edges])
 
 
 
