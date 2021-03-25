@@ -14,18 +14,6 @@ class PeriodicComponent(object):
         self.master = None
         self.part_of = []
 
-class Vertex(object):
-    def __init__(self, id_, coord):
-        self.id_ = id_
-        self.coord = np.array(coord)
-        self.slaves = []
-        self.master = None
-        self.part_of = []
-
-    def __repr__(self):
-        return f"Vertex({self.id_},{self.coord})"
-
-
     def add_slave(self, new_slave):
         new_slave.master=self
         self.slaves.append(new_slave)
@@ -43,60 +31,6 @@ class Vertex(object):
         self.add_slave(new_slave)
 
     def vector_to_master(self):
-        if self.master==None:
-            raise Exception('No master vertex')
-        return self.master.coord - self.coord
-
-    def periodicity_to_master(self):
-        if self.master == None:
-            raise Exception('No master vertex')
-        return np.sign(self.vector_to_master())
-
-    def plot(self, ax = None, color= 'k' , marker = 'o', **kwargs):
-        if  ax == None:
-            fig = plt.figure()
-            ax = fig.add_subplot(111, projection='3d')
-        ax.scatter(*self.coord, color=color, marker=marker, **kwargs)
-
-class Edge(object):
-    def __init__(self, id_, verts):
-        self.id_ = id_
-        self.verts = verts
-        self.slaves = []
-        self.master = None
-        self.part_of = []
-
-    def __repr__(self):
-        return f"Edge({self.id_})"
-
-    def add_slave(self, new_slave):
-        new_slave.master = self
-        self.slaves.append(new_slave)
-
-    def add_slaves(self, new_slaves):
-        for new_slave in new_slaves:
-            self.add_slave(new_slave)
-
-    def remove_slave(self, old_slave):
-        old_slave.master = None
-        self.slaves.remove(old_slave)
-
-    def update_slave(self, new_slave, old_slave):
-        self.remove_slave(old_slave)
-        self.add_slave(new_slave)
-
-    def replace_vertex(self, new_vertex, old_vertex):
-        #does not work for negative edge
-        if np.sign(self.id_) == -1:
-            raise Exception ('Can not alter reversed edge')
-        if self.verts[0].id_ == old_vertex.id_:
-            self.verts[0]= new_vertex
-        elif self.verts[1].id_ == old_vertex.id_:
-            self.verts[1] = new_vertex
-        else:
-            raise Exception('Could not find old vertex in edge')
-
-    def vector_to_master(self):
         if self.master == None:
             raise Exception('No master vertex')
         return self.master.xm() - self.xm()
@@ -107,11 +41,87 @@ class Edge(object):
         periodicity = np.sign(self.vector_to_master())
         return periodicity
 
+class PeriodicCompositComponent(PeriodicComponent):
+    def __init__(self, id_, parts):
+        self.parts = parts
+        super().__init__(id_)
+
+    def replace_part(self, new_part, old_part):
+        # does not work for reversed parts
+        if np.sign(self.id_) == -1:
+            raise Exception('Can not alter reversed part')
+        replace_ind = [abs(part.id_) for part in self.parts].index(abs(old_part.id_))
+        direction_relative_to_old = new_part.direction_relative_to_other(self.parts[replace_ind])
+        if direction_relative_to_old == -1.0:
+            self.parts[replace_ind] = new_part.reverse()
+        elif direction_relative_to_old == 1.0:
+            self.parts[replace_ind] = new_part
+        else:
+            raise Exception('Failed to replace part')
+
+    def remove_part(self, old_part):
+        del_ind = [abs(part.id_) for part in self.parts].index(abs(old_part.id_))
+        del self.parts[del_ind]
+
+    def reverse(self):
+        if np.sign(self.id_) == -1:
+            return self.org_comp
+        else:
+            return reversedPCC(self)
+
     def direction_relative_to_master(self):
         if self.master == None:
             return 1
         else:
             return self.direction_relative_to_other(self.master)
+
+class reversedPCC(object):
+    '''Every time an attribute is called, the supplied instance is copied and reversed,
+        returning only the reversed result of the attribute'''
+
+    def __init__(self, org_component):
+        self.org_comp = org_component
+
+    def __getattr__(self, attr):
+        temp = copy.copy(self.org_comp)
+        temp.id_ = -temp.id_
+        if hasattr(temp.parts[0], 'reverse'):
+            temp.parts = [part.reverse() for part in temp.parts[::-1]]
+        else:
+            temp.parts = temp.parts[::-1]
+        if attr in self.__dict__:
+            # this object has it
+            return getattr(self, attr)
+        return getattr(temp, attr)
+
+class Vertex(PeriodicComponent):
+    def __init__(self, id_, coord):
+        self.coord = np.array(coord)
+        super().__init__(id_)
+
+    def __repr__(self):
+        return f"Vertex({self.id_},{self.coord})"
+
+    def direction_relative_to_other(self, vert):
+        '''Does not have a direction relative to other'''
+        return 1
+
+    def plot(self, ax = None, color= 'k' , marker = 'o', **kwargs):
+        if  ax == None:
+            fig = plt.figure()
+            ax = fig.add_subplot(111, projection='3d')
+        ax.scatter(*self.coord, color=color, marker=marker, **kwargs)
+
+    def xm(self):
+        '''Barycenter'''
+        return self.coord
+
+
+class Edge(PeriodicCompositComponent):
+    def __init__(self, id_, parts):
+        super().__init__(id_, parts)
+    def __repr__(self):
+        return f"Edge({self.id_})"
 
     def direction_relative_to_other(self, edge):
         vect_sum = self.vector() + edge.vector()
@@ -123,27 +133,17 @@ class Edge(object):
             raise Exception('Edges not collinear')
 
     def x0(self):
-        return self.verts[0].coord
+        return self.parts[0].coord
 
     def x1(self):
-        return self.verts[1].coord
+        return self.parts[1].coord
 
     def vector(self):
         return self.x1() - self.x0()
 
     def xm(self):
+        '''Barycenter'''
         return (self.x0()+self.x1())/2
-
-    def reverse(self):
-        #temp = Edge(id_=-self.id_, verts=[])
-        #temp.verts = [self.verts[1], self.verts[0]]
-        #temp.slaves=self.slaves
-        #temp.master=self.master
-        #temp.part_of= self.part_of
-        if np.sign(self.id_) == -1:
-            return self.org_edge
-        else:
-            return reversedEdge(self)
 
     def length(self):
         return np.linalg.norm(self.vector())
@@ -154,52 +154,26 @@ class Edge(object):
             ax = fig.add_subplot(111, projection='3d')
         ax.plot(*np.array([self.x0(), self.x1()]).swapaxes(0, 1), color=color, **kwargs)
 
-class reversedEdge(Edge):
-    '''Every time an attribute is called, the current instance is copied and reversed,
-            # returning only the reversed result of the attribute'''
-    def __init__(self, edge):
-        self.org_edge = edge
-    def __getattr__(self, attr):
-        temp = copy.copy(self.org_edge)
-        temp.id_ = -temp.id_
-        temp.verts = temp.verts[::-1]
-        if attr in self.__dict__:
-            # this object has it
-            return getattr(self, attr)
-        return getattr(temp, attr)
-
-class Face(object):
-    def __init__(self, id_, edges):
-        self.id_ = id_
-        self.edges = edges
-        self.master = None
-        self.slaves = []
-        self.part_of = []
+class Face(PeriodicCompositComponent):
+    def __init__(self, id_, parts):
+        super().__init__(id_, parts)
 
     def __repr__(self):
         return f"Face({self.id_})"
 
-    def add_slave(self, new_slave):
-        new_slave.master = self
-        self.slaves.append(new_slave)
-
-    def add_slaves(self, new_slaves):
-        for new_slave in new_slaves:
-            self.add_slave(new_slave)
-
     def verts_in_face(self):
         vert_list = []
-        for edge in self.edges:
-            vert_list.extend(edge.verts)
+        for edge in self.parts:
+            vert_list.extend(edge.parts)
         return list(set(vert_list))
 
-    def barycenter(self):
+    def xm(self):
         return np.array([vert.coord for vert in self.verts_in_face()]).mean(axis=0)
 
     def face_eq(self):
-        barycenter = self.barycenter()
+        barycenter = self.xm()
         vectors = []
-        for edge in self.edges: #edgeID=self.edges[1]
+        for edge in self.parts:
             v1=edge.x0() - barycenter
             v2=edge.x1() - barycenter
             v3 = np.cross(v1, v2)
@@ -211,8 +185,8 @@ class Face(object):
 
     def angle_deviation(self):
         vectors=[]
-        barycenter=self.barycenter()
-        for edge in self.edges:
+        barycenter=self.xm()
+        for edge in self.parts:
             v1=edge.x0() - barycenter
             v2=edge.x1() - barycenter
             v3 = np.cross(v1, v2)
@@ -235,31 +209,12 @@ class Face(object):
         max_angle_ind = angles.index(max_angle)
         max_bary_ind=baryangles[max_angle_ind:max_angle_ind+2].index(max(baryangles[max_angle_ind:max_angle_ind+2]))
 
-        return [self.edges[max_angle_ind+max_bary_ind], max_angle]
-
-    def remove_edge(self, old_edge):
-        del_ind = [abs(edge.id_) for edge in self.edges].index(abs(old_edge.id_))
-        del self.edges[del_ind]
-
-    def replace_edge(self, new_edge, old_edge):
-        replace_ind = [abs(edge.id_) for edge in self.edges].index(abs(old_edge.id_))
-        if new_edge.direction_relative_to_other(self.edges[replace_ind]) == -1.0:
-            self.edges[replace_ind] = new_edge.reverse()
-        elif new_edge.direction_relative_to_other(self.edges[replace_ind]) == 1.0:
-            self.edges[replace_ind] = new_edge
-        else:
-            raise Exception('Edges not collinear')
-
-    def reverse(self):
-        if np.sign(self.id_) == -1:
-            return self.org_face
-        else:
-            return reversedFace(self)
+        return [self.parts[max_angle_ind+max_bary_ind], max_angle]
 
     def area(self):
-        barycenter = self.barycenter()
+        barycenter = self.xm()
         area = 0
-        for edge in self.edges:
+        for edge in self.parts:
             coords = np.array([barycenter,
                                edge.x0(),
                                edge.x1()])
@@ -279,54 +234,35 @@ class Face(object):
         if ax == None:
             fig = plt.figure()
             ax = fig.add_subplot(111, projection='3d')
-        for edge in self.edges:
-            coord = np.array([edge.x0(), edge.x1(), self.barycenter()])
+        for edge in self.parts:
+            coord = np.array([edge.x0(), edge.x1(), self.xm()])
             triangle = Poly3DCollection(coord, alpha=0.4, facecolors=color)
             ax.add_collection3d(triangle)
         if normal_vector:
             #ax.scatter(*np.array([self.barycenter()]).swapaxes(0, 1), color='r')
             ax.quiver(
-                *self.barycenter(),  # <-- starting point of vector
+                *self.xm(),  # <-- starting point of vector
                 *self.find_face_eq()[1:],  # <-- directions of vector
                 color='red', alpha=.8, lw=3)
 
-class reversedFace(Face):
-    def __init__(self, face):
-        '''Every time an attribute is called, the current instance is copied and reversed,
-        # returning only the reversed result of the attribute'''
-        self.org_face = face
-
-    def __getattr__(self, attr):
-        # see if this object has attr
-        # NOTE do not use hasattr, it goes into
-        # infinite recurrsion
-        temp = copy.copy(self.org_face)
-        temp.id_ = -temp.id_
-        temp.edges = [edge.reverse() for edge in temp.edges[::-1]]
-        if attr in self.__dict__:
-            #this object has it
-            return getattr(self, attr)
-        return getattr(temp, attr)
-
-class Polyhedron(object):
-    def __init__(self, id_, faces):
-        self.id_ = id_
-        self.faces=faces
+class Polyhedron(PeriodicCompositComponent):
+    def __init__(self, id_, parts):
+        super().__init__(id_, parts)
 
     def remove_face(self, old_face):
-        del_ind = [abs(face.id_) for face in self.faces].index(abs(old_face.id_))
-        del self.faces[del_ind]
+        del_ind = [abs(face.id_) for face in self.parts].index(abs(old_face.id_))
+        del self.parts[del_ind]
 
     def replace_face(self, new_face, old_face):
-        replace_ind = [abs(face.id_) for face in self.faces].index(abs(old_face.id_))
-        if new_face.direction_relative_to_other(self.faces[replace_ind]) == -1:
-            self.faces[replace_ind] = new_face.reverse()
-        elif new_face.direction_relative_to_other(self.faces[replace_ind]) == 1:
-            self.faces[replace_ind] = new_face
+        replace_ind = [abs(face.id_) for face in self.parts].index(abs(old_face.id_))
+        if new_face.direction_relative_to_other(self.parts[replace_ind]) == -1:
+            self.parts[replace_ind] = new_face.reverse()
+        elif new_face.direction_relative_to_other(self.parts[replace_ind]) == 1:
+            self.parts[replace_ind] = new_face
 
     def barycenter(self):
         verts = []
-        for face in self.faces:
+        for face in self.parts:
             verts.extend(face.verts_in_face())
         unique_verts = set(verts)
         coords = np.array([vert.coord for vert in unique_verts])
@@ -335,14 +271,15 @@ class Polyhedron(object):
     def volume(self):
         poly_volume = 0
         poly_barycenter = self.barycenter()
-        for face in self.faces:
-            face_barycenter = face.barycenter()
-            for edge in face.edges:
+        for face in self.parts:
+            face_barycenter = face.xm()
+            for edge in face.parts:
                 coords = np.array([poly_barycenter,
                                    face_barycenter,
                                    edge.x0(),
                                    edge.x1()])
                 poly_volume += volume_tet(coords)
+        return poly_volume
 
 def volume_tet(coords):
     v1 = coords[1] - coords[0]
@@ -383,5 +320,5 @@ if __name__ == "__main__":
     faces[3].add_slave(faces[3])
     faces[4].add_slave(faces[5])
     face = faces[1]
-    self = Polyhedron(id_=1, faces = list(faces.values()))
+    self = Polyhedron(1, list(faces.values()))
 

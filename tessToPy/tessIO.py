@@ -25,7 +25,7 @@ def get_edges(lines, verts):
     for line in lines[start_ind + 2:start_ind + 2 + int(lines[start_ind + 1])]:
         id_ = int(line.split()[0])
         edge_verts = [verts[vid_] for vid_ in map(int, line.split()[1:3])]  # Edge vertex 0 and 1
-        edges[id_] = Edge(id_=id_, verts=edge_verts)
+        edges[id_] = Edge(id_=id_, parts=edge_verts)
     return edges
 
 
@@ -38,7 +38,7 @@ def get_faces(lines, edges):
         edge_line_ind = vertex_line_ind + 1
         face_edges = [edges[eid_] for eid_ in map(int, lines[edge_line_ind].split()[1:])]
         id_ = int(lines[vertex_line_ind].split()[0])
-        faces[id_] = Face(id_=id_, edges=face_edges)
+        faces[id_] = Face(id_=id_, parts=face_edges)
     return faces
 
 
@@ -50,7 +50,7 @@ def get_polyhedrons(self):
         polyhedron_line_ind = start_ind + 2 + i
         id_ = int(self.lines[polyhedron_line_ind].split()[0])
         poly_faces = list(map(int, self.lines[polyhedron_line_ind].split()[2:]))
-        polyhedrons[id_] = PolyhedronClass(self.faces, id_=id_, faces=poly_faces)
+        polyhedrons[id_] = PolyhedronClass(self.faces, id_=id_, parts=poly_faces)
     return polyhedrons
 
 def get_periodicity(lines, verts, edges, faces):

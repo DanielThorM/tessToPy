@@ -34,7 +34,7 @@ class TestTessIO(unittest.TestCase):
         line = self.lines[start_ind + 2]
         id_ = int(line.split()[0])
         edge_verts_id_ = list(map(int, line.split()[1:3]))
-        test_edge_verts_id_ = [vert.id_ for vert in self.edges[id_].verts]
+        test_edge_verts_id_ = [vert.id_ for vert in self.edges[id_].parts]
         self.assertEqual(edge_verts_id_, test_edge_verts_id_)
         self.assertEqual(num_edges, len(self.edges))
 
@@ -48,7 +48,7 @@ class TestTessIO(unittest.TestCase):
         face_edges_id_ = [eid_ for eid_ in map(int, self.lines[edge_line_ind].split()[1:])]
         id_ = int(self.lines[vertex_line_ind].split()[0])
         test_face_verts_id_ = [vert.id_ for vert in self.faces[id_].verts_in_face()]
-        test_face_edges_id_ = [edge.id_ for edge in self.faces[id_].edges]
+        test_face_edges_id_ = [edge.id_ for edge in self.faces[id_].parts]
         self.assertEqual(set(face_verts_id_), set(test_face_verts_id_))
         self.assertEqual(set(face_edges_id_), set(test_face_edges_id_))
         self.assertEqual(num_faces, len(self.faces))
@@ -99,8 +99,8 @@ class TestEdge(unittest.TestCase):
 
     def test_xn(self):
         edge = self.edges[1]
-        x0 = self.verts[edge.verts[0].id_].coord
-        x1 = self.verts[edge.verts[1].id_].coord
+        x0 = self.verts[edge.parts[0].id_].coord
+        x1 = self.verts[edge.parts[1].id_].coord
         xm = (x0+x1)/2
         self.assertIsNone(np.testing.assert_allclose(edge.x0(), x0))
         self.assertIsNone(np.testing.assert_allclose(edge.x1(), x1))
@@ -108,15 +108,15 @@ class TestEdge(unittest.TestCase):
 
     def test_vector(self):
         edge = self.edges[1]
-        x0 = self.verts[edge.verts[0].id_].coord
-        x1 = self.verts[edge.verts[1].id_].coord
+        x0 = self.verts[edge.parts[0].id_].coord
+        x1 = self.verts[edge.parts[1].id_].coord
         vector = x1-x0
         self.assertIsNone(np.testing.assert_allclose(edge.vector(), vector))
 
     def test_length(self):
         edge = self.edges[1]
-        x0 = self.verts[edge.verts[0].id_].coord
-        x1 = self.verts[edge.verts[1].id_].coord
+        x0 = self.verts[edge.parts[0].id_].coord
+        x1 = self.verts[edge.parts[1].id_].coord
         vector = x1-x0
         length = np.sqrt(vector[0]**2+vector[1]**2+vector[2]**2)
         self.assertEqual(edge.length(), length)
@@ -146,28 +146,28 @@ class TestEdge(unittest.TestCase):
 
     def test_replace_vertex(self):
         edge_a = self.edges[1]
-        org_verts = [vert.id_ for vert in edge_a.verts]
+        org_verts = [vert.id_ for vert in edge_a.parts]
         org_vector = edge_a.vector()
         new_vert = 5
-        edge_a.replace_vertex(self.verts[new_vert], edge_a.verts[0])
+        edge_a.replace_part(self.verts[new_vert], edge_a.parts[0])
         new_verts = org_verts[:]
         new_verts[0] = new_vert
         new_vector = self.verts[new_verts[1]].coord - self.verts[new_verts[0]].coord
         self.assertIsNone(np.testing.assert_allclose(edge_a.vector(), new_vector))
-        edge_a.replace_vertex(self.verts[org_verts[0]], edge_a.verts[0])
+        edge_a.replace_part(self.verts[org_verts[0]], edge_a.parts[0])
         self.assertIsNone(np.testing.assert_allclose(edge_a.vector(), org_vector))
 
     def test_replace_vertex_reverse(self):
         edge_a = self.edges[1]
-        org_verts = [vert.id_ for vert in edge_a.verts]
+        org_verts = [vert.id_ for vert in edge_a.parts]
         edge_a_rev = self.edges[-1]
         new_vert = 5
-        edge_a.replace_vertex(self.verts[new_vert], edge_a.verts[0])
+        edge_a.replace_part(self.verts[new_vert], edge_a.parts[0])
         new_verts = org_verts[:]
         new_verts[0] = new_vert
         new_vector = self.verts[new_verts[1]].coord - self.verts[new_verts[0]].coord
         self.assertIsNone(np.testing.assert_allclose(edge_a_rev.vector(), -1*edge_a.vector()))
-        edge_a.replace_vertex(self.verts[org_verts[0]], edge_a.verts[0])
+        edge_a.replace_part(self.verts[org_verts[0]], edge_a.parts[0])
 
     def test_master_slave_reverse(self):
         edge_a = self.edges[5]
@@ -202,10 +202,10 @@ class TestFace(unittest.TestCase):
 
     def test_face_reverse(self):
         face = self.faces[1]
-        edges = face.edges
+        edges = face.parts
         edges_rev = [edge.reverse().id_ for edge in edges[::-1]]
         test_face_rev = face.reverse()
-        test_edges_rev = [edge.id_ for edge in test_face_rev.edges]
+        test_edges_rev = [edge.id_ for edge in test_face_rev.parts]
         self.assertEqual(edges_rev, test_edges_rev)
         face_eq = face.face_eq()
         test_face_eq = test_face_rev.face_eq()
@@ -214,22 +214,22 @@ class TestFace(unittest.TestCase):
     def test_edge_replace(self):
         face = self.faces[1]
         org_face_eq = face.face_eq()
-        org_edge_id = face.edges[0].id_
+        org_edge_id = face.parts[0].id_
         edge_copy = copy.copy(self.edges[org_edge_id])
         edge_copy.id_ = 9999
         edge_copy = edge_copy.reverse()
-        face.replace_edge(edge_copy, face.edges[0])
+        face.replace_part(edge_copy, face.parts[0])
         new_face_eq = face.face_eq()
-        face.replace_edge(self.edges[org_edge_id], edge_copy)
+        face.replace_part(self.edges[org_edge_id], edge_copy)
         self.assertIsNone(np.testing.assert_allclose(org_face_eq, new_face_eq))
 
     def test_remove_edge(self):
         face = self.faces[1]
-        org_edge_id = face.edges[0].id_
+        org_edge_id = face.parts[0].id_
         face_copy = copy.deepcopy(face)
-        face_copy.remove_edge(self.edges[org_edge_id])
-        set([edge.id_ for edge in face.edges])-set([org_edge_id])
-        set([edge.id_ for edge in face_copy.edges])
+        face_copy.remove_part(self.edges[org_edge_id])
+        set([edge.id_ for edge in face.parts])-set([org_edge_id])
+        set([edge.id_ for edge in face_copy.parts])
 
 
 
