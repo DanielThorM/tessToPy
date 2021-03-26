@@ -78,6 +78,8 @@ class TestTessIO(unittest.TestCase):
         domain_size = self.domain_size
         self.assertIsNone(np.testing.assert_allclose(test_domain_size, domain_size))
 
+
+
 class TestVertex(unittest.TestCase):
     def setUp(self):
         self.coords = np.array([[0, 0, 0], [1.0, 1.1, 1.2]])
@@ -97,6 +99,7 @@ class TestVertex(unittest.TestCase):
     def test_no_master(self):
         self.assertRaises(Exception, self.vertices[0].vector_to_master)
         self.assertRaises(Exception, self.vertices[0].periodicity_to_master)
+
 
 class TestEdge(unittest.TestCase):
     def setUp(self):
@@ -186,6 +189,12 @@ class TestEdge(unittest.TestCase):
         self.assertEqual(set(slaves), set(rev_slaves))
         self.assertEqual(self.edges[115].master.id_, self.edges[-115].master.id_)
 
+    def test_part_of(self):
+        vert = self.verts[2]
+        part_of_id = [1,2,11,187]
+        test_part_of_id = [edge.id_ for edge in vert.part_of]
+        self.assertEqual(part_of_id, test_part_of_id)
+
 class TestFace(unittest.TestCase):
     def setUp(self):
         self.lines = tio.read_tess('../tests/n10-id1.tess')
@@ -235,11 +244,12 @@ class TestFace(unittest.TestCase):
     def test_remove_edge(self):
         face = self.faces[1]
         org_edge_id = face.parts[0].id_
-        face_copy = copy.copy(face)
-        face_copy.remove_part(self.edges[org_edge_id])
+        face.remove_part(face.parts[0])
         face_list = set([edge.id_ for edge in face.parts])-set([org_edge_id])
-        test_face_list = set([edge.id_ for edge in face_copy.parts])
+        test_face_list = set([edge.id_ for edge in face.parts])
         self.assertEqual(face_list, test_face_list)
+        self.faces = tio.get_faces(self.lines, self.edges)
+
 
     def test_periodicity(self):
         face = self.faces[5].slaves[0]
@@ -298,11 +308,11 @@ class TestPolyhedron(unittest.TestCase):
     def test_remove_face(self):
         poly = self.polyhedrons[1]
         org_face_id = poly.parts[0].id_
-        poly_copy = copy.copy(poly)
-        poly_copy.remove_part(self.edges[org_face_id])
+        poly.remove_part(self.faces[org_face_id])
         poly_list = set([edge.id_ for edge in poly.parts])-set([org_face_id])
-        test_poly_list = set([edge.id_ for edge in poly_copy.parts])
+        test_poly_list = set([face.id_ for face in poly.parts])
         self.assertEqual(poly_list, test_poly_list)
+        self.polyhedrons = tio.get_polyhedrons(self.lines, self.faces)
 
 if __name__ == '__main__':
     unittest.main()

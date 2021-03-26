@@ -18,7 +18,6 @@ def get_verts(lines):
         verts[id_] = Vertex(id_=id_, coord=coord)
     return verts
 
-
 def get_edges(lines, verts):
     edges = absdict()
     start_ind = lines.index(' **edge\n')
@@ -81,11 +80,96 @@ def get_domain_size(lines):
     domain_start_ind = start_ind + 5
     n_verts = 8
     domain = {}
-    for line in lines[domain_start_ind: domain_start_ind + n_verts*2:2]: #line=self.lines[domain_start_ind: domain_start_ind + n_verts*2:2] [0]
+    for line in lines[domain_start_ind: domain_start_ind + n_verts*2:2]:
         id_ = int(line.split()[0])
         coord = np.array(list(map(float, line.split()[1:-1])))
         domain[id_] = coord
     return domain[7]-domain[1]
+
+def write_tess(tess, file_name=None):
+        if file_name == None:
+            base_name, base_extension= tess.tess_file_name.rsplit('.', 1)
+            file_name = base_name+'_mod.'+base_extension
+        with open(file_name, 'w') as file:
+           #vertex
+            file.write(' **vertex\n')
+            file.write('{}\n'.format(len(tess.vertices.keys())))
+            for vert in tess.vertices.values():
+                file.write('{} {} {} {} {}\n'.format(vert.id_, *vert.coord, 0))
+
+            file.write(' **edge\n')
+            file.write('{}\n'.format(len(tess.edges.keys())))
+            for edge in tess.edges.values():
+                edge_verts = [vert.id_ for vert in edge.parts]
+                file.write('{} {} {}\n'.format(edge.id_, *edge_verts))
+
+            file.write(' **face\n')
+            file.write('{}\n'.format(len(tess.faces.keys())))
+            for face in tess.faces.values():
+                file.write('{} \n'.format(face.id_))
+                face_edge_line='{}'.format(len(face.parts))
+                for edge in face.parts:
+                    face_edge_line += ' {}'.format(edge.id_)
+                face_edge_line += '\n'
+                file.write(face_edge_line)
+                file.write('\n')
+                file.write('\n')
+
+            file.write(' **polyhedron\n')
+            file.write('{}\n'.format(len(tess.polyhedrons.keys())))
+            for poly in tess.polyhedrons.values():
+                poly_face_line = '{} {}'.format(poly.id_, len(poly.parts))
+                for face in poly.parts:
+                    poly_face_line += ' {}'.format(face.id_)
+                poly_face_line += '\n'
+                file.write(poly_face_line)
+
+            file.write(' **domain\n')
+            file.write('  *general\n')
+            file.write('   cube\n')
+            file.write('  *vertex\n')
+            file.write('{}\n'.format(8))
+            domain_binaries = [[0, 0, 0],
+                             [1, 0, 0],
+                             [1, 1, 0],
+                             [0, 1, 0],
+                             [0, 0, 1],
+                             [0, 1, 1],
+                             [1, 1, 1],
+                             [1, 0, 1]]
+            for i, dom_bin in enumerate(domain_binaries):
+                file.write('{} {} {} {} none\n'.format(i+1, *tess.domain_size*dom_bin))
+                file.write('\n')
+
+
+            #polyhedron
+            if tess.periodic == True:
+                file.write(' **periodicity\n')
+
+                def write_periodicity(slave_list, slave_block_len):
+                    file.write('{}\n'.format(len(slave_list)))
+                    for slave in slave_list:
+                        write_line = '{} '*(slave_block_len-1) + '{}\n'
+                        if slave_block_len == 5:
+                            write_line = write_line.format(slave.id_, slave.master.id_, *map(int, -1*slave.per_to_m))
+                        elif slave_block_len == 6:
+                            write_line = write_line.format(slave.id_, slave.master.id_, *map(int, -1 * slave.per_to_m),
+                                                           slave.direction_relative_to_master())
+                        file.write(write_line)
+
+                file.write('  *vertex\n')
+                slave_list = [slave for slave in tess.vertices.values() if slave.master != None]
+                write_periodicity(slave_list, 5)
+
+                file.write('  *edge\n')
+                slave_list = [slave for slave in tess.edges.values() if slave.master != None]
+                write_periodicity(slave_list, 6)
+
+                file.write('  *face\n')
+                slave_list = [slave for slave in tess.faces.values() if slave.master != None]
+                write_periodicity(slave_list, 6)
+
+            file.write('***end')
 
 if __name__ == "__main__":
     lines = read_tess('../tests/n10-id1.tess')

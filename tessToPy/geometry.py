@@ -4,27 +4,35 @@ import copy
 import sys
 sys.path.insert(0, '../tessToPy/')
 from absdict import *
-from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+from mpl_toolkits.mplot3d import Axes3D
+from mpl_toolkits.mplot3d.art3d import Line3DCollection
 
 class PeriodicComponent(object):
     def __init__(self, id_):
         self.id_ = id_
         self.slaves = []
         self.master = None
+        self.per_to_m = None
+        self.vect_to_m = None
         self.part_of = []
 
-    def add_slave(self, new_slave):
-        new_slave.master=self
-        self.slaves.append(new_slave)
+    def calc_periodicity(self):
+        self.per_to_m = self.periodicity_to_master()
+        self.vect_to_m = self.vector_to_master()
 
-    def add_slaves(self, new_slaves):
-        for new_slave in new_slaves:
-            self.add_slave(new_slave)
+    def add_slave(self, slave):
+        if type(slave) == type([]):
+            for slave_ in slave:
+                self.add_slave(slave_)
+        else:
+            slave.master=self
+            slave.calc_periodicity()
+            self.slaves.append(slave)
 
-    def remove_slave(self, old_slave):
-        old_slave.master=None
-        self.slaves.remove(old_slave)
+    def remove_slave(self, slave):
+        slave.master=None
+        self.slaves.remove(slave)
 
     def update_slave(self, new_slave, old_slave):
         self.remove_slave(old_slave)
@@ -43,8 +51,17 @@ class PeriodicComponent(object):
 
 class PeriodicCompositComponent(PeriodicComponent):
     def __init__(self, id_, parts):
-        self.parts = parts
         super().__init__(id_)
+        self.parts = []
+        self.add_part(parts)
+
+    def add_part(self, part):
+        if type(part) == type([]): #check isinstance of classes
+            for part_ in part:
+                self.add_part(part_)
+        else:
+            part.part_of.append(self)
+            self.parts.append(part)
 
     def replace_part(self, new_part, old_part):
         # does not work for reversed parts
@@ -53,14 +70,20 @@ class PeriodicCompositComponent(PeriodicComponent):
         replace_ind = [abs(part.id_) for part in self.parts].index(abs(old_part.id_))
         direction_relative_to_old = new_part.direction_relative_to_other(self.parts[replace_ind])
         if direction_relative_to_old == -1.0:
+            new_part.part_of.append(self)
+            old_part.part_of.remove(self)
             self.parts[replace_ind] = new_part.reverse()
+
         elif direction_relative_to_old == 1.0:
+            new_part.part_of.append(self)
+            old_part.part_of.remove(self)
             self.parts[replace_ind] = new_part
         else:
             raise Exception('Failed to replace part')
 
     def remove_part(self, old_part):
         del_ind = [abs(part.id_) for part in self.parts].index(abs(old_part.id_))
+        old_part.part_of.remove(self)
         del self.parts[del_ind]
 
     def reverse(self):
@@ -122,7 +145,6 @@ class Vertex(PeriodicComponent):
         '''Barycenter'''
         return self.coord
 
-
 class Edge(PeriodicCompositComponent):
     def __init__(self, id_, parts):
         super().__init__(id_, parts)
@@ -137,7 +159,7 @@ class Edge(PeriodicCompositComponent):
         elif np.all(np.isclose(vect_sum, 2*self.vector())):
             return 1
         else:
-            raise Exception('Edges not collinear')
+            return None
 
     def x0(self):
         return self.parts[0].coord
@@ -155,11 +177,18 @@ class Edge(PeriodicCompositComponent):
     def length(self):
         return np.linalg.norm(self.vector())
 
-    def plot(self, ax=None, color='k', **kwargs):
+    def plot(self, ax=None, color='k'):
         if ax == None:
             fig = plt.figure()
             ax = fig.add_subplot(111, projection='3d')
-        ax.plot(*np.array([self.x0(), self.x1()]).swapaxes(0, 1), color=color, **kwargs)
+        coords = np.array([[self.x0(), self.x1()]])
+        edge = Line3DCollection(coords)
+        edge.set_edgecolor(color)
+        ax.add_collection3d(edge)
+        #ax.plot(*np.array([self.x0(), self.x1()]).swapaxes(0, 1), color=color, **kwargs)
+        #coord = np.array([self.x0(), self.x1(), self.x0()])
+        #edge = Line3DCollection(coord)
+        #ax.add_collection3d(edge)
 
 class Face(PeriodicCompositComponent):
     def __init__(self, id_, parts):
@@ -237,13 +266,13 @@ class Face(PeriodicCompositComponent):
             raise Exception('Faces not equal')
 
 
-    def plot(self, ax = None, color = 'k', normal_vector = False):
+    def plot(self, ax = None, color = 'k', alpha=0.4, normal_vector = False, **kwargs):
         if ax == None:
             fig = plt.figure()
             ax = fig.add_subplot(111, projection='3d')
         for edge in self.parts:
             coord = np.array([edge.x0(), edge.x1(), self.xm()])
-            triangle = Poly3DCollection(coord, alpha=0.4, facecolors=color)
+            triangle = Poly3DCollection(coord, alpha=alpha, facecolors=color, **kwargs, zorder = 1)
             ax.add_collection3d(triangle)
         if normal_vector:
             #ax.scatter(*np.array([self.barycenter()]).swapaxes(0, 1), color='r')
@@ -255,6 +284,12 @@ class Face(PeriodicCompositComponent):
 class Polyhedron(PeriodicCompositComponent):
     def __init__(self, id_, parts):
         super().__init__(id_, parts)
+
+    def edges(self):
+        edges = []
+        for face in self.parts:
+            edges.extend(face.parts)
+        return list(set(edges))
 
     def remove_face(self, old_face):
         del_ind = [abs(face.id_) for face in self.parts].index(abs(old_face.id_))
@@ -297,6 +332,15 @@ class Polyhedron(PeriodicCompositComponent):
     def sphericity(self):
         return equivalent_surface_area(self.volume())/self.area()
 
+    def plot(self, ax = None, facecolor = 'k', edgecolor = 'k', facealpha=0.8):
+        if ax == None:
+            fig = plt.figure()
+            ax = fig.add_subplot(111, projection='3d')
+        for face in self.parts:
+            face.plot(ax, color=facecolor, alpha = facealpha)
+        for edge in self.edges():
+            edge.plot(ax, color = edgecolor)
+
 def volume_tet(coords):
     v1 = coords[1] - coords[0]
     v2 = coords[2] - coords[0]
@@ -322,14 +366,14 @@ if __name__ == "__main__":
     verts = absdict()
     for id_, coord in enumerate(coords):
         verts[id_] = Vertex(id_, coord)
-    verts[0].add_slaves(list(verts.values())[1:])
+    verts[0].add_slave(list(verts.values())[1:])
     edge_ids = [[0, 1], [1,2], [2, 3], [3, 0], [0, 4], [1, 5], [2,6], [3,7], [4, 5], [5, 6], [6,7], [7,4]]
     edges = absdict()
     for id_, edge in enumerate(edge_ids):
         edges[id_] = Edge(id_, [verts[i] for i in edge])
-    edges[0].add_slaves([edges[2], edges[8], edges[10]])
-    edges[1].add_slaves([edges[3],edges[9], edges[11]])
-    edges[4].add_slaves([edges[5], edges[6], edges[7]])
+    edges[0].add_slave([edges[2], edges[8], edges[10]])
+    edges[1].add_slave([edges[3],edges[9], edges[11]])
+    edges[4].add_slave([edges[5], edges[6], edges[7]])
     face_ids = [[0, 5, -8, -4],
              [1, 6, -9, -5],
              [2, 7, -10, -6],
