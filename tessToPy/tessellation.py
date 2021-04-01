@@ -133,6 +133,8 @@ class PeriodicTessellation(Tessellation):
         # Each edge is merged to the new vertex location. The dependent vertices are moved.
         ##################################################################################
 
+
+
         t = time.time()
         #Check if dependent vertices have merged:
         duplicate_vertex_sets = self.check_for_duplicate_vertices()
@@ -567,7 +569,6 @@ class PeriodicTessellation(Tessellation):
                         checked_face_list.append(slave)
             checked_face_list.append(face)
 
-
     def check_if_periodic(self, master_coord, slave_coord):
         coord_offset = slave_coord - master_coord
         def test_floatingpoint():
@@ -585,9 +586,9 @@ class PeriodicTessellation(Tessellation):
         else:
             return None
 
-    def compare_arrays(self, arr0, arr1, rel_tol=1e-09, abs_tol=0.0):
+    def compare_arrays(self, arr0, arr1, rel_tol=1e-09, atol=0.0):
         rtol = rel_tol * max(self.domain_size)
-        return np.allclose(arr0, arr1, rtol=rel_tol, atol=abs_tol)
+        return np.allclose(arr0, arr1, rtol=rtol, atol=atol)
 
 if __name__ == '__main__':
     tess_file_name = '../tests/n10-id1.tess'
