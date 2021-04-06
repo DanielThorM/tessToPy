@@ -1,5 +1,6 @@
 import numpy as np
 import os
+from tessToPy.absdict import *
 import tessToPy.tessIO as tio
 import tessToPy.geometry as tg
 import matplotlib.pyplot as plt
@@ -16,6 +17,7 @@ class Tessellation(object):
         self.vertex_id_counter = max(self.vertices.keys())
         self.edge_id_counter = max(self.edges.keys())
         self.rejected_edge_del = []
+        self.deleted_edges = []
         self.edge_lengths = self.get_edge_lengths()
 
     def read_tess(self):
@@ -27,11 +29,13 @@ class Tessellation(object):
         self.polyhedrons = tio.get_polyhedrons(self.lines, self.faces)
         self.domain_size = tio.get_domain_size(self.lines)
 
-    def plot(self, alpha = 0.8, facecolor = 'gray'):
+    def plot(self, alpha = 0.8, facecolor = 'gray', deleted_edges = []):
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
         for poly in self.polyhedrons.values():
             poly.plot(ax, facealpha = alpha, facecolor = facecolor)
+        for edge in deleted_edges:
+            edge.plot(ax, color = 'r')
 
     def get_edge_lengths(self):
         lengths = np.array([[edge.length(), edge] for edge in self.edges.values()
@@ -67,28 +71,28 @@ class PeriodicTessellation(Tessellation):
         os.remove('temp')
         tess_copy.tess_file_name = self.tess_file_name
         tess_copy.rejected_edge_del = self.rejected_edge_del
+        tess_copy.deleted_edges = self.deleted_edges
         tess_copy.vertex_id_counter = self.vertex_id_counter
         tess_copy.edge_id_counter = self.edge_id_counter
         return tess_copy
 
-    def regularize(self, n):
+    def regularize(self, n=1):
         '''Try to remove the n shortest edges'''
-
+        self.edge_lengths = self.get_edge_lengths()
         for i in range(n):
             if len(self.edge_lengths) <= 1:
                 print('No more edges to check!')
                 break
-            edge = self.edge_lengths[0, 1] #Edge232
-            print(f'Trying to delete edge {edge.id_}')
-            self.try_delete_edge(edge)
+            edge = self.edge_lengths[i, 1] #Edge232
+            if edge in self.edges.values():
+                print(f'Trying to delete edge {edge.id_}, i = {i}')
+                _ = self.try_delete_edge(edge)
 
     def delete_edge(self, edge, del_layer=0):
+        print_trigger = False
         if del_layer == 0: print_trigger = True
-        new_verts = []
-        collapsed_faces = []
-        verts_for_deletion = []
-        coalesced_edges = []
-
+        self.new_verts = []
+        self.del_verts = []
         ##################################################################################
         # Find edge dependencies and new vertex locations
         ##################################################################################
@@ -109,133 +113,102 @@ class PeriodicTessellation(Tessellation):
         ##################################################################################
         t = time.time()
         for affected_edge, new_edge_vertex in zip(edges, new_edge_vertex_locs):
-            # affected_edge, new_edge_vertex = list(zip(edges, new_edge_vertices))[0]
-            new_verts_, collapsed_faces_, verts_for_deletion_ = self.replace_edge_with_vertex(affected_edge,
-                                                                                            new_edge_vertex,
-                                                                                             print_trigger)
-            new_verts.append(new_verts_)
-            collapsed_faces.append(collapsed_faces_)
-            if collapsed_faces_ != []:
-                print (f'Collapsed {collapsed_faces_[0]}, for edge {edge}')
-            verts_for_deletion.extend(verts_for_deletion_)
+            # affected_edge, new_edge_vertex = list(zip(edges, new_edge_vertex_locs))[0]
+            new_vert_ = self.replace_edge_with_vertex(affected_edge, new_edge_vertex, print_trigger)
+            self.new_verts.append(new_vert_)
 
         for affected_vertex, new_vertex_loc in zip(vertices, updated_vertex_locs):
             # affected_vertex, newVertexLoc = list(zip(vertices, new_vertex_vertices))[0]
-            updated_verts_ = self.update_vertex_loc(affected_vertex, new_vertex_loc)
-            new_verts.append(updated_verts_)
-            collapsed_faces.append([])
-            verts_for_deletion.extend([])
+            new_vert_ = self.update_vertex_loc(affected_vertex, new_vertex_loc)
+            self.new_verts.append(new_vert_)
+
         elapsed = time.time() - t
         if del_layer == 0:
             print('Time to delete dependencies: {:.3f} s'.format(elapsed))
 
         ##################################################################################
-        # Each edge is merged to the new vertex location. The dependent vertices are moved.
+        # Periodicity of the new vertices are assigned
         ##################################################################################
-
-
-
-        t = time.time()
-        #Check if dependent vertices have merged:
-        duplicate_vertex_sets = self.check_for_duplicate_vertices()
-        elapsed = time.time() - t
-        print('Time to check for duplicate vertices: {:.3f} s'.format(elapsed))
-
-        collapsed_polyhedrons = []
-        for collapsed_faces_pr_edge in collapsed_faces:
-            if collapsed_faces_pr_edge != []:
-                for collapsed_face in collapsed_faces_pr_edge:  # collapsedFace=820
-                    temp_edge, col_poly = self.delete_face_to_edge(collapsed_face, print_trigger)
-                    coalesced_edges.append(temp_edge)
-                    if col_poly != []:
-                        for poly in col_poly:
-                            coalesced_edges.extend(self.collapse_polyhedron(poly))
-
-        elapsed = time.time() - t
-        print('Time to deal with collapsed polyhedrons: {:.3f} s'.format(elapsed))
-
-        filtered_new_verts = list(set(self.vertices.values()).intersection(set(new_verts)))
-        affected_vertices = copy.copy(filtered_new_verts)
+        self.resolve_vertex_periodicity(self.new_verts)
 
         # Update the vertex and edge periodicity of the affected edges
-        self.update_periodicity_internal(affected_vertices, coalesced_edges)
-        # self.findParents()
+        self.update_periodicity_internal(self.new_verts)
         ####################################################################
         # Find all affected edges, by newVertexList, and check internal angles
         ########################################################################
-        affected_edges = [edge_id for vert_id in new_vertex_list for edge_id in self.vertices[vert_id].parents]
-        angles = np.array([self.faces[face_id].find_angle_deviation()
-                           for edge_id in affected_edges for face_id in self.edges[edge_id].parents])
-        sorted_angles = angles[angles[:, 1].argsort()[::-1], :]
-        self.new_vertex_list = new_vertex_list
-        self.deleted_verts_list = deleted_verts_list
+
+        sorted_angles = self.face_deviation(self.new_verts)
+
         if sorted_angles[0, 1] < 20 * np.pi / 180.:
             return True
         elif del_layer == 0:
             checked_edges = []
-            for edge_angle in sorted_angles:  # edge_angle =  sorted_angles[0]
-                if edge_angle[1] > 20 * np.pi / 180. and int(abs(edge_angle[0])) not in checked_edges:
+            for edge, angle in zip(sorted_angles[:,0], sorted_angles[:,1]):
+
+                # edge, angle =  sorted_angles[3,0], sorted_angles[3,1]
+                if angle > 20 * np.pi / 180. and abs(edge.id_) not in checked_edges:
                     try:
-                        layer_edge_id = int(abs(edge_angle[0]))
-                        dep_edges = self.find_periodic_dependecies(self.edges[layer_edge_id])[0]
-                        checked_edges.extend(dep_edge.id_ for dep_edge in dep_edges)
-                        self.tess_copy = copy.deepcopy(self)
-                        # new_vertex_list_layer = self.tess_copy.remove_edge(layer_edge_id, del_layer=del_layer + 1)
-                        if self.tess_copy.remove_edge(layer_edge_id, del_layer=del_layer + 1):
-                            new_vertex_list.extend(self.tess_copy.new_vertex_list)
-                            for vert in self.tess_copy.deleted_verts_list:
-                                if vert in new_vertex_list:
-                                    new_vertex_list.remove(vert)
-                            self.vertices = self.tess_copy.vertices
-                            self.edges = self.tess_copy.edges
-                            self.faces = self.tess_copy.faces
-                            self.polyhedrons = self.tess_copy.polyhedrons
-                            self.edge_lengths = self.tess_copy.edge_lengths
-                            self.vertex_id_counter = self.tess_copy.vertex_id_counter
-                            self.edge_id_counter = self.tess_copy.edge_id_counter
+                        dep_edges = self.find_periodic_dependecies(edge)[0]
+                        checked_edges.extend(abs(dep_edge.id_) for dep_edge in dep_edges)
+                        if self.try_delete_edge(edge, del_layer=del_layer+1) == True:
                             print('{} st/nd layer deletion of edge {} was successful'.format(
-                                del_layer + 1, int(edge_angle[0])))
+                                del_layer + 1, int(edge.id_)))
                             print('--------------------------------------------------------------')
+                            return True
                         else:
-                            self.tess_copy = []
-                            print('{} st/nd layer deletion of edge {} failed with new angle {}'.format(
-                                del_layer + 1, int(edge_angle[0]), edge_angle[1]))
+                            pass
                     except:
                         print('Error encountered in {} st/nd layer deletion of edge {}'.format(
-                            del_layer + 1, int(edge_angle[0])))
+                            del_layer + 1, int(edge.id_)))
                 else:
                     pass
-            new_vertex_list_final = set(new_vertex_list)
-            filtered_vertex_list = [vert_id for vert_id in new_vertex_list_final if vert_id in self.vertices.keys()]
-            affected_edges = [edge_id for vert_id in filtered_vertex_list for edge_id in
-                              self.vertices[vert_id].parents
-                              if edge_id in self.edges.keys()]
-            angles = np.array([self.faces[face_id].find_angle_deviation()
-                               for edge_id in affected_edges for face_id in self.edges[edge_id].parents])
-            sorted_angles = angles[angles[:, 1].argsort()[::-1], :]
-            if sorted_angles[0, 1] < 20 * np.pi / 180.:
-                return True
-            else:
-                return False
+            return False
         else:
             return False
 
-    def try_delete_edge(self, edge):
-        self.tess_copy = self.copy()
-        if self.tess_copy.delete_edge(edge):
-            self.reload(self.tess_copy)
-            print('Delete accepted, structure updated')
-            print('----------------------------------------')
-            self.tess_copy = []
+    def face_deviation(self, new_verts):
+        affected_edges = self.affected_parents(new_verts)
+        affected_faces = self.affected_parents(affected_edges)
+        angles = np.array([face.angle_deviation() for face in affected_faces])
+        for i in range(len(angles)):
+            if np.sign(angles[i,0].id_) == -1:
+                angles[i,0] = angles[i,0].reverse()
+        return angles[angles[:, 1].argsort()[::-1], :]
 
+    def resolve_vertex_periodicity(self, verts):
+        all_verts = []
+        for vert in verts:
+            if vert.master != None:
+                all_verts.append(vert.master)
+                vert.master = None
+            if vert.slaves != []:
+                all_verts.extend(vert.slaves)
+                vert.slaves = []
+        all_verts = all_verts + verts
+        all_verts[0].add_slave(all_verts[1:])
+
+    def try_delete_edge(self, edge, del_layer=0):
+        self.tess_copy = self.copy()
+        tess_copy_edge = self.tess_copy.edges[edge.id_]
+        if self.tess_copy.delete_edge(tess_copy_edge, del_layer=del_layer) == True:
+            if del_layer==0:
+                print('Delete accepted, structure updated')
+                print('----------------------------------------')
+            self.reload(self.tess_copy)
+            dep_edges, _, _, _ = self.find_periodic_dependecies(edge)
+            self.deleted_edges.extend(dep_edges)
+            self.edge_lengths = self.get_edge_lengths()
+            self.tess_copy = []
+            return True
         else:
             print('Delete of edge {} rejected'.format(edge.id_))
             print('----------------------------------------')
             dep_edges, _, _, _ = self.find_periodic_dependecies(edge)
             for dep_edge in dep_edges:
                 self.rejected_edge_del.append(dep_edge)
-            self.edge_lengths = self.find_edge_lengths()
+            self.edge_lengths = self.get_edge_lengths()
             self.tess_copy = []
+            return False
 
     def reload(self, tess_copy):
         self.vertices = tess_copy.vertices
@@ -363,28 +336,21 @@ class PeriodicTessellation(Tessellation):
         new_vertex = self.vertices[new_vertex_id]
 
         # Initiate list of all edges about to be affected by the merging
-        affected_edges = []
-        collapsed_faces = []
-        # For each vertex about to be merged, update all affected edges with new vertex_id
-        for vert in old_verts:  # vert = old_verts[0]
-            # Find edges connected to each vertices about to be merges. Exlude the edge to be removed
-            affected_edges_pr_vert = list(set(
-                [edge_ for edge_ in vert.part_of if
-                 edge_.id_ != edge.id_]))
-            for affected_edge in affected_edges_pr_vert:
-                # Find index in edge.verts where old vertex is located
-                affected_edge.replace_part(new_vertex, vert)
-            # Add edges from each vertex to the collection
-            affected_edges.extend(affected_edges_pr_vert)
+        for old_vert in old_verts: #old_vert  = old_verts[1]
+            affected_edges = self.affected_parents([old_vert])
+            affected_edges.remove(edge)
+            for affected_edge in affected_edges:
+                affected_edge.replace_part(new_vertex, old_vert)
 
         # Remove deleted edge from affected faces
         affected_faces = copy.copy(edge.part_of)
-        for face in affected_faces:
+        for face in affected_faces: #face = affected_faces[0]
             face.remove_part(edge)
             # Check if face has collapsed:
             # If face eliminated:
             if len(face.parts) <= 2:
-                collapsed_faces.append(face)
+                #raise Exception('Face needs to be deleted')
+                self.collapse_face(face, print_trigger=print_trigger)
 
         if print_trigger == True:
             print(f'Suggested edge for deletion: edge {edge.id_}')
@@ -393,32 +359,29 @@ class PeriodicTessellation(Tessellation):
         #Delete edge and assiciated verts
         del self.edges[edge.id_]
         for vert in old_verts:
+            self.del_verts.append(vert)
             del self.vertices[vert.id_]
 
-        def test_vert_replace():
-            for face in self.faces.values():
-                for edge in face.parts:
-                    if vert in edge.parts:
-                        print (f'{face}, {edge}')
-                        raise Exception('Old verts not cleanded from faces')
-
-        return new_vertex, collapsed_faces, old_verts
+        return new_vertex
 
     def update_vertex_loc(self, vertex, new_vertex_loc):
         '''Updates the location of an existing vertex'''
         #vertex = affected_vertex
         vertex.coord = new_vertex_loc
+        vertex.master = None
+        vertex.slaves = []
         return vertex
 
-    def delete_face_to_edge(self, collapsed_face, print_trigger=False):
+    def collapse_face(self, face, print_trigger=False):
 
         # if the collapsed face does not belong in a slave/master combo, but the deleted edge did,
         # the edge to be deleted face should not move the masterVertex.
         #[self.tess_copy.edges[edge].master_to for edge in self.tess_copy.faces[39].edges]
-        old_edges = collapsed_face.parts
+        #print (face)
+        old_edges = face.parts
         # Remove face from poly parent
-        for polyhedron in collapsed_face.part_of:
-            polyhedron.remove_part(collapsed_face)
+        for id_ in [poly.id_ for poly in face.part_of]:
+            self.polyhedrons[id_].remove_part(face)
 
         # Merge the two edges for all remaining faces
         self.edge_id_counter += 1
@@ -426,34 +389,39 @@ class PeriodicTessellation(Tessellation):
 
 
         new_edge_vertices = old_edges[0].parts
+        for vert in new_edge_vertices:
+            vert.part_of.remove(self.edges[abs(old_edges[0].id_)])
+            vert.part_of.remove(self.edges[abs(old_edges[1].id_)])
+
         self.edges[new_edge_id] = tg.Edge(id_=new_edge_id, parts=new_edge_vertices)
         new_edge = self.edges[new_edge_id]
 
         # for each old edge, remove and replace with new edge
-        for old_edge in old_edges: #oldEdge=remEdges[0]
+        for old_edge in old_edges: #old_edge=old_edges[0]
             # Find all parent faces and replace
-            for face in old_edge.part_of:
-                if face != collapsed_face:
-                    face.replace_part(new_edge, old_edge)
+            for face_id in [face.id_ for face in old_edge.part_of] : #face_ = old_edge.part_of[1]
+                if self.faces[face_id] != face:
+                    self.faces[face_id].replace_part(new_edge, old_edge)
 
         if print_trigger == True:
-            print('Suggested face for deletion: face {}'.format(collapsed_face))
+            print('Suggested face for deletion: face {}'.format(face))
             print('Coalesced edges {},{} to edge: {}'.format(abs(old_edges[0].id_), abs(old_edges[1].id_), new_edge_id))
 
         collapsed_poly = []
-        for poly in collapsed_face.part_of:
+        for poly in face.part_of: #poly = face.part_of[0]
             if len(poly.parts) <= 2:
-                collapsed_poly.append(poly)
-                self.collapse_polyhedron(poly)
+                raise Exception('Polyhedron needs to be deleted')
+                #collapsed_poly.append(poly)
+                self.collapse_polyhedron(poly, print_trigger = print_trigger)
 
         #Delete all components
-        del self.faces[collapsed_face.id_]
+        del self.faces[face.id_]
         del self.edges[old_edges[0].id_]
         del self.edges[old_edges[1].id_]
 
-        return new_edge, collapsed_poly
+        #return new_edge
 
-    def collapse_polyhedron(self, poly):
+    def collapse_polyhedron(self, poly, print_trigger = False):
         rem_face, del_face = poly.parts
         #Replace one of the faces with the remaining one
         for poly_ in del_face.part_of:
@@ -480,33 +448,32 @@ class PeriodicTessellation(Tessellation):
 
         for old_edge in del_edges:
             for old_vert in old_edge.verts:
+                self.del_verts.append(old_vert)
                 del self.vertices[old_vert.id_]
             del self.edges[old_edge.id_]
         del self.faces[del_face.id_]
         del self.polyhedrons[poly.id_]
         return rem_edges
 
-    def update_periodicity_internal(self, affected_vertices, coaleced_edges=[]):
-        all_affected_edges = coaleced_edges
-        for vertex in affected_vertices:
-            all_affected_edges.extend(vertex.part_of)
-        all_affected_edges = set(all_affected_edges)
+    def affected_parents(self, affected_parts):
+        affected_parents = []
+        for part in affected_parts:
+            for component in part.part_of:
+                if component not in affected_parents:
+                    affected_parents.append(component)
+        return affected_parents
 
-        all_affected_vertices = []
-        all_affected_faces = []
+    def update_periodicity_internal(self, affected_vertices):
+        all_affected_edges = self.affected_parents(affected_vertices)
 
-        for edge in all_affected_edges:
-            all_affected_vertices.extend(edge.parts)
-            all_affected_faces.extend(edge.part_of)
+        all_affected_faces = self.affected_parents(all_affected_edges)
 
-        all_affected_vertices = set(all_affected_vertices)
-        all_affected_faces = set(all_affected_faces)
-        for all_affected in [all_affected_vertices, all_affected_edges, all_affected_faces]:
+        for all_affected in [all_affected_edges, all_affected_faces]:
             for item in all_affected:
                 item.master = None
                 item.slaves = []
 
-        self.update_periodicity_internal_verts(all_affected_vertices)
+        #self.update_periodicity_internal_verts(all_affected_vertices)
         self.update_periodicity_internal_edges(all_affected_edges)
         self.update_periodicity_internal_faces(all_affected_faces)
 
@@ -528,28 +495,33 @@ class PeriodicTessellation(Tessellation):
 
     def update_periodicity_internal_edges(self, all_affected_edges):
         checked_edge_list = []
-        for edge in all_affected_edges: #edge =  affected_edges[0]
+        for edge in all_affected_edges: #edge =  list(all_affected_edges)[1]
             if edge not in checked_edge_list:
                 verts = edge.parts
                 connected_verts = []
                 for vert in verts:
                     if vert.slaves != []:
-                        connected_verts.extend(verts.slaves)
+                        connected_verts.extend(vert.slaves)
                     elif vert.master != None:
                         connected_verts.extend(vert.master.slaves)
                         connected_verts.remove(vert)
-                parent_edges = set([parent_edge for connected_vert in connected_verts for parent_edge in
-                                    connected_vert.part_of]).intersection(all_affected_edges)
-                master_vector = edge.vector()
-                for slave in parent_edges: #parentEdgeID = 51
-                    if slave.direction_relative_to_other(edge.vector()) != None:
+
+                parent_edges = []
+                for connected_vert in connected_verts:
+                    for parent_edge in connected_vert.part_of:
+                        if parent_edge not in parent_edges:
+                            parent_edges.append(parent_edge)
+
+
+                for slave in parent_edges: #slave = list(parent_edges)[0]
+                    if slave.direction_relative_to_other(edge) != None:
                         edge.add_slave(slave)
                         checked_edge_list.append(slave)
             checked_edge_list.append(edge)
 
     def update_periodicity_internal_faces(self, all_affected_faces):
         checked_face_list = []
-        for face in all_affected_faces:  #edge =  affected_edges[0]
+        for face in all_affected_faces:  #face =  list(all_affected_faces)[0]
             if face not in checked_face_list:
                 edges = face.parts
                 connected_edges = []
@@ -558,15 +530,14 @@ class PeriodicTessellation(Tessellation):
                         connected_edges.extend(edge.slaves)
                     elif edge.master != None:
                         connected_edges.extend(edge.master.slaves)
-                        connected_edges.remove(edge)
-                parent_faces = set([parent_face for connected_edge in connected_edges for parent_face in
-                                    connected_edge.part_of]).intersection(all_affected_faces)
-                master_vector = face.face_eq()[1:]
 
+                parent_faces = self.affected_parents(connected_edges)
+                master_vector = face.face_eq()[1:]
                 for slave in parent_faces:
-                    if self.compare_arrays(abs(slave.face_eq()[1:]), abs(master_vector), rel_tol=1e-09, abs_tol=0.0):
-                        face.add_slave(slave)
-                        checked_face_list.append(slave)
+                    if self.compare_arrays(abs(slave.face_eq()[1:]), abs(master_vector), scaled_rtol=1e-09, atol=0.0):
+                        if slave not in face.slaves:
+                            face.add_slave(slave)
+                            checked_face_list.append(slave)
             checked_face_list.append(face)
 
     def check_if_periodic(self, master_coord, slave_coord):
@@ -586,14 +557,17 @@ class PeriodicTessellation(Tessellation):
         else:
             return None
 
-    def compare_arrays(self, arr0, arr1, rel_tol=1e-09, atol=0.0):
-        rtol = rel_tol * max(self.domain_size)
+    def compare_arrays(self, arr0, arr1, scaled_rtol=1e-09, atol=0.0):
+        rtol = scaled_rtol * max(self.domain_size)
         return np.allclose(arr0, arr1, rtol=rtol, atol=atol)
 
 if __name__ == '__main__':
-    tess_file_name = '../tests/n10-id1.tess'
+    tess_file_name = 'tests/n10-id1.tess'
     self = PeriodicTessellation(tess_file_name)
+    org_self = PeriodicTessellation(tess_file_name)
+    self.regularize(n=50)
     del_layer = 0
-
+    print_trigger = True
+    #edge = self.edges[24]
 
 

@@ -1,8 +1,8 @@
 import numpy as np
 import sys
 sys.path.insert(0, '../tessToPy/')
-from absdict import *
-from geometry import *
+from tessToPy.absdict import *
+from tessToPy.geometry import *
 
 def read_tess(file_name):
     with open(file_name, 'r') as tess_raw:
@@ -172,7 +172,7 @@ def write_tess(tess, file_name=None):
             file.write('***end')
 
 if __name__ == "__main__":
-    lines = read_tess('../tests/n10-id1.tess')
+    lines = read_tess('tests/n10-id1.tess')
     verts = get_verts(lines)
     edges = get_edges(lines, verts)
     faces = get_faces(lines, edges)

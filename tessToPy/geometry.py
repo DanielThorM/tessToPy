@@ -3,7 +3,7 @@ import numpy as np
 import copy
 import sys
 sys.path.insert(0, '../tessToPy/')
-from absdict import *
+from tessToPy.absdict import *
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.mplot3d.art3d import Line3DCollection
