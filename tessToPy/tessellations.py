@@ -1260,17 +1260,21 @@ class Tessellation(object):
         axarr[1, 1].set_xlabel('[]')
         fig.tight_layout()
 
+if __name__ == '__main__':
+    #folderName = r'H:\thesis\periodic\foam_ae\S10R1\ID1'
+    #mesh_file_name = folderName + r'\\test'
+    self = []
+    self = Tessellation(os.getcwd()+r'\\tests\\n10-id1.tess')
+    self.regularize(n=200)
+    self.write_tess('temp_old')
+    #self.write_tess(r'tests\\org_reg.tess')
+    #self.mesh_file_name=mesh_file_name
+    #self.mesh2D(elem_size=0.02)
+    #tessellation=self
 
-#folderName = r'H:\thesis\periodic\foam_ae\S10R1\ID1'
-#mesh_file_name = folderName + r'\\test'
-self = Tessellation(os.getcwd()+r'\\tests\\n10-id1.tess')
-self.regularize(n=1)
-#self.mesh_file_name=mesh_file_name
-#self.mesh2D(elem_size=0.02)
-#tessellation=self
+    #folderName = r'H:\thesis\linear\representative\S05R1\ID1'
+    #mesh_file_name = folderName + r'\\test'
+    #self = Tessellation(folderName + r'\\nfrom_morpho-id1.tess')
+    #self.mesh_file_name=mesh_file_name
+    #self.mesh2D(elem_size=0.02)
 
-#folderName = r'H:\thesis\linear\representative\S05R1\ID1'
-#mesh_file_name = folderName + r'\\test'
-#self = Tessellation(folderName + r'\\nfrom_morpho-id1.tess')
-#self.mesh_file_name=mesh_file_name
-#self.mesh2D(elem_size=0.02)

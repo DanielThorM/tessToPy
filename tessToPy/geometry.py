@@ -46,6 +46,8 @@ class PeriodicComponent(object):
     def periodicity_to_master(self):
         if self.master == None:
             raise Exception('No master vertex')
+        vector_to_master = self.vector_to_master()
+        vector_to_master[np.isclose(vector_to_master, [0,0,0])] = 0
         periodicity = np.sign(self.vector_to_master())
         return periodicity
 

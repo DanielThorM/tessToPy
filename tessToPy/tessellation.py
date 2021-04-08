@@ -29,17 +29,20 @@ class Tessellation(object):
         self.polyhedrons = tio.get_polyhedrons(self.lines, self.faces)
         self.domain_size = tio.get_domain_size(self.lines)
 
-    def plot(self, alpha = 0.8, facecolor = 'gray', deleted_edges = []):
+    def plot(self, alpha = 0.8, facecolor='gray', highlight_edges=[], highlight_faces=[]):
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
         for poly in self.polyhedrons.values():
-            poly.plot(ax, facealpha = alpha, facecolor = facecolor)
-        for edge in deleted_edges:
+            poly.plot(ax, facealpha = alpha, facecolor=facecolor)
+        for edge in highlight_edges:
             edge.plot(ax, color = 'r')
+        for face in highlight_faces:
+            face.plot(ax, color = 'r', alpha = alpha)
 
     def get_edge_lengths(self):
+        rej_ids = [edge.id_ for edge in self.rejected_edge_del]
         lengths = np.array([[edge.length(), edge] for edge in self.edges.values()
-                            if edge.id_ not in self.rejected_edge_del])
+                            if edge.id_ not in rej_ids])
         if len(lengths) == 0:
             print('No more edges to find')
             return []
@@ -83,7 +86,7 @@ class PeriodicTessellation(Tessellation):
             if len(self.edge_lengths) <= 1:
                 print('No more edges to check!')
                 break
-            edge = self.edge_lengths[i, 1] #Edge232
+            edge = self.edge_lengths[0, 1] #Edge232
             if edge in self.edges.values():
                 print(f'Trying to delete edge {edge.id_}, i = {i}')
                 _ = self.try_delete_edge(edge)
@@ -93,6 +96,7 @@ class PeriodicTessellation(Tessellation):
         if del_layer == 0: print_trigger = True
         self.new_verts = []
         self.del_verts = []
+
         ##################################################################################
         # Find edge dependencies and new vertex locations
         ##################################################################################
@@ -100,6 +104,8 @@ class PeriodicTessellation(Tessellation):
         # The dependent edges and vertices are found as offsets from the master edge.
         edges, edge_periodicities, vertices, vertex_periodicities = self.find_periodic_dependecies(edge)
 
+        if 206 in [abs(edge_.id_) for edge_ in edges]:
+            pass
         # The new vertex location for a edge collapse, and new vertex locations for moved slave vertices are found
         new_edge_vertex_locs, updated_vertex_locs = self.calc_new_vertices(edges, edge_periodicities, vertices,
                                                                         vertex_periodicities)
@@ -208,6 +214,7 @@ class PeriodicTessellation(Tessellation):
                 self.rejected_edge_del.append(dep_edge)
             self.edge_lengths = self.get_edge_lengths()
             self.tess_copy = []
+            self.edge_lengths = self.get_edge_lengths()
             return False
 
     def reload(self, tess_copy):
@@ -523,18 +530,19 @@ class PeriodicTessellation(Tessellation):
         checked_face_list = []
         for face in all_affected_faces:  #face =  list(all_affected_faces)[0]
             if face not in checked_face_list:
-                edges = face.parts
-                connected_edges = []
-                for edge in edges:
-                    if edge.slaves != []:
-                        connected_edges.extend(edge.slaves)
-                    elif edge.master != None:
-                        connected_edges.extend(edge.master.slaves)
+                #edges = face.parts
+                #connected_edges = []
+                #for edge in edges:
+                    #if edge.slaves != []:
+                        #connected_edges.extend(edge.slaves)
+                    #elif edge.master != None:
+                        #connected_edges.extend(edge.master.slaves)
 
-                parent_faces = self.affected_parents(connected_edges)
+                #parent_faces = self.affected_parents(connected_edges)
                 master_vector = face.face_eq()[1:]
-                for slave in parent_faces:
-                    if self.compare_arrays(abs(slave.face_eq()[1:]), abs(master_vector), scaled_rtol=1e-09, atol=0.0):
+                for slave in all_affected_faces:
+                    if self.compare_arrays(abs(slave.face_eq()[1:]), abs(master_vector), scaled_rtol=1e-09, atol=0.0)\
+                            and slave != face:
                         if slave not in face.slaves:
                             face.add_slave(slave)
                             checked_face_list.append(slave)
@@ -557,17 +565,24 @@ class PeriodicTessellation(Tessellation):
         else:
             return None
 
-    def compare_arrays(self, arr0, arr1, scaled_rtol=1e-09, atol=0.0):
+    def compare_arrays(self, arr0, arr1, scaled_rtol=1e-09, atol=1e-14):
         rtol = scaled_rtol * max(self.domain_size)
         return np.allclose(arr0, arr1, rtol=rtol, atol=atol)
 
 if __name__ == '__main__':
     tess_file_name = 'tests/n10-id1.tess'
+    self = []
     self = PeriodicTessellation(tess_file_name)
     org_self = PeriodicTessellation(tess_file_name)
-    self.regularize(n=50)
+    self.regularize(n=200)
+
     del_layer = 0
     print_trigger = True
-    #edge = self.edges[24]
+    #old_tess = PeriodicTessellation('tests/org_reg.tess')
+    #new_tess = PeriodicTessellation('tests/new_reg.tess')
 
+    tio.write_tess(self, 'temp_new')
+
+    PeriodicTessellation('temp_old').plot()
+    PeriodicTessellation('temp_new').plot(highlight_faces=[self.faces[85], self.faces[113]])
 
