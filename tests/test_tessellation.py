@@ -7,7 +7,7 @@ import tessToPy.tessellation as ts
 
 class TestTessellation(unittest.TestCase):
     def setUp(self):
-        tess_file_name = '../tests/n10-id1.tess'
+        tess_file_name = 'tess_files/n10-id1.tess'
         self.tess = ts.PeriodicTessellation(tess_file_name)
 
     def test_copy(self):

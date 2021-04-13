@@ -6,7 +6,7 @@ import tessToPy.tessIO as tio
 
 class TestTessIO(unittest.TestCase):
     def setUp(self):
-        self.lines = tio.read_tess('../tests/n10-id1.tess')
+        self.lines = tio.read_tess('tess_files/n10-id1.tess')
         self.domain_size = np.array([1, 1, 1])
         self.verts = tio.get_verts(self.lines)
         self.edges = tio.get_edges(self.lines, self.verts)
@@ -82,8 +82,12 @@ class TestTessIO(unittest.TestCase):
 
 class TestVertex(unittest.TestCase):
     def setUp(self):
-        self.coords = np.array([[0, 0, 0], [1.0, 1.1, 1.2]])
-        self.periodicity = np.array([-1, -1, -1])
+        self.coords = np.array([[-0.133851269156, 1.099615654876, 0.112936431341],
+                                [0.866148730844, 0.099615654876, 1.112936431341]])
+        self.coords = np.array([[-0.133851269156, 1.099615654876, 0.112936431341],
+                                [0.866148730844, 0.099615654876, 10.11293643134]])
+        self.periodicity = np.array([-1, 1, -1])
+        self.domain_size = [1,1,10]
         self.vertices = [tg.Vertex(0, self.coords[0]), tg.Vertex(1, list(self.coords[1]))]
         self.vertices[0].add_slave(self.vertices[1])
 
@@ -103,7 +107,7 @@ class TestVertex(unittest.TestCase):
 
 class TestEdge(unittest.TestCase):
     def setUp(self):
-        self.lines = tio.read_tess('../tests/n10-id1.tess')
+        self.lines = tio.read_tess('tess_files/n10-id1.tess')
         self.verts = tio.get_verts(self.lines)
         self.edges = tio.get_edges(self.lines, self.verts)
         self.faces = tio.get_faces(self.lines, self.edges)
@@ -197,7 +201,7 @@ class TestEdge(unittest.TestCase):
 
 class TestFace(unittest.TestCase):
     def setUp(self):
-        self.lines = tio.read_tess('../tests/n10-id1.tess')
+        self.lines = tio.read_tess('tess_files/n10-id1.tess')
         self.verts = tio.get_verts(self.lines)
         self.edges = tio.get_edges(self.lines, self.verts)
         self.faces = tio.get_faces(self.lines, self.edges)
@@ -271,7 +275,7 @@ class TestFace(unittest.TestCase):
 
 class TestPolyhedron(unittest.TestCase):
     def setUp(self):
-        self.lines = tio.read_tess('../tests/n10-id1.tess')
+        self.lines = tio.read_tess('tess_files/n10-id1.tess')
         self.verts = tio.get_verts(self.lines)
         self.edges = tio.get_edges(self.lines, self.verts)
         self.faces = tio.get_faces(self.lines, self.edges)

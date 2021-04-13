@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import math
 import copy
 import sys
 sys.path.insert(0, '../tessToPy/')
@@ -47,8 +48,9 @@ class PeriodicComponent(object):
         if self.master == None:
             raise Exception('No master vertex')
         vector_to_master = self.vector_to_master()
-        vector_to_master[np.isclose(vector_to_master, [0,0,0])] = 0
-        periodicity = np.sign(self.vector_to_master())
+        is_close = [math.isclose(a, 0, rel_tol=1e-9, abs_tol=1e-9) for a in vector_to_master]
+        vector_to_master[is_close] = 0
+        periodicity = np.sign(vector_to_master)
         return periodicity
 
 class PeriodicCompositComponent(PeriodicComponent):

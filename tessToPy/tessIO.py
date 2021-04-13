@@ -171,6 +171,55 @@ def write_tess(tess, file_name=None):
 
             file.write('***end')
 
+def tess_dict(tess):
+    # vertex
+    tess_dict = {}
+    tess_dict['vertices'] = {}
+    for vert in tess.vertices.values():
+        tess_dict['vertices'][vert.id_] = {'coords': vert.coord,
+                                           'slaves': [slave.id_ for slave in vert.slaves]}
+
+    name_list = ['edges', 'faces', 'polyhedrons']
+    comp_list_list = [tess.edges.values(), tess.faces.values(), tess.polyhedrons.values()]
+    for comp_name, comp_list in zip(name_list, comp_list_list):
+        tess_dict[comp_name] = {}
+        for component in comp_list:
+            tess_dict[comp_name][component.id_] = {'parts': [part.id_ for part in component.parts],
+                                                   'slaves': [slave.id_ for slave in component.slaves]}
+    tess_dict['domain_size'] = tess.domain_size
+
+    tess_dict['periodic'] = False
+    if tess.periodic == True:
+        tess_dict['periodic'] = True
+    return tess_dict
+
+def load_tess_dict(tess_dict):
+    verts = {}
+    for id_, vert in tess_dict['vertices'].items():
+        verts[id_] = Vertex(id_=id_, coord=vert['coords'])
+
+    edges = absdict()
+    for id_, component in tess_dict['edges'].items():
+        edges[id_] = Edge(id_=id_, parts=[verts[part_id] for part_id in component['parts']])
+
+    faces = absdict()
+    for id_, component in tess_dict['faces'].items():
+        faces[id_] = Face(id_=id_, parts=[edges[part_id] for part_id in component['parts']])
+
+    polyhedrons = absdict()
+    for id_, component in tess_dict['polyhedrons'].items():
+        polyhedrons[id_] = Polyhedron(id_=id_, parts=[faces[part_id] for part_id in component['parts']])
+
+    if tess_dict['periodic'] == True:
+        name_list = ['vertices', 'edges', 'faces', 'polyhedrons']
+        for component_group, component_dict in zip(name_list, [verts, edges, faces, polyhedrons]):
+            for component_id, component in tess_dict[component_group].items():
+                for slave_id in component['slaves']:
+                    component_dict[component_id].add_slave(component_dict[slave_id])
+
+    return verts, edges, faces, polyhedrons, tess_dict['domain_size'], tess_dict['periodic']
+
+
 if __name__ == "__main__":
     lines = read_tess('tests/n10-id1.tess')
     verts = get_verts(lines)
