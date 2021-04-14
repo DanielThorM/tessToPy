@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import copy
 import time
 import scipy.optimize
+import subprocess
 
 class Tessellation(object):
     def __init__(self, tess_file_name, tess_dict=None):
@@ -93,7 +94,7 @@ class Tessellation(object):
         if main_vert_set != derived_vert_set:
             raise Exception('Duplicate vertices found')
 
-    def edge_length_distibution(self, ax=None, bins=50, fc = (0, 0, 0, 0.5)):
+    def edge_length_distribution(self, ax=None, bins=50, fc = (0, 0, 0, 0.5)):
         """Plots the histogram of edge lengths. An ax can be provided for overlaying different histograms.
         Returns ax, bins"""
         if ax == None:
@@ -616,8 +617,8 @@ class PeriodicTessellation(Tessellation):
         self.update_periodicity_internal_edges(all_affected_edges)
         self.update_periodicity_internal_faces(all_affected_faces)
 
-
     def update_periodicity_internal_edges(self, all_affected_edges):
+        """Updates the periodicity of the affected edges by checking if any combination of edges are periodic."""
         checked_edge_list = []
         for edge in all_affected_edges: #edge =  list(all_affected_edges)[1]
             if edge not in checked_edge_list:
@@ -644,18 +645,10 @@ class PeriodicTessellation(Tessellation):
             checked_edge_list.append(edge)
 
     def update_periodicity_internal_faces(self, all_affected_faces):
+        """Updates the periodicity of the affected faces by checking if any combination of edges are periodic."""
         checked_face_list = []
         for face in all_affected_faces:  #face =  list(all_affected_faces)[0]
             if face not in checked_face_list:
-                #edges = face.parts
-                #connected_edges = []
-                #for edge in edges:
-                    #if edge.slaves != []:
-                        #connected_edges.extend(edge.slaves)
-                    #elif edge.master != None:
-                        #connected_edges.extend(edge.master.slaves)
-
-                #parent_faces = self.affected_parents(connected_edges)
                 master_vector = face.face_eq()[1:]
                 for slave in all_affected_faces:
                     if self.compare_arrays(abs(slave.face_eq()[1:]), abs(master_vector))\
@@ -665,23 +658,8 @@ class PeriodicTessellation(Tessellation):
                             checked_face_list.append(slave)
             checked_face_list.append(face)
 
-    def check_if_periodic(self, master_coord, slave_coord):
-        coord_offset = slave_coord - master_coord
-        def test_floatingpoint():
-            base_size = 10000000
-            val = 0.1
-            val_floatingPoint = .1+ base_size
-            rel_val = val_floatingPoint- base_size
-            math.isclose(val, rel_val, rel_tol=1e-10, abs_tol=1e-9)
-        offset_is_zero = [math.isclose(offset, 0.0, rel_tol=1e-9, abs_tol=1e-9) for offset in coord_offset]
-        offset_as_unity =  np.array(list(map(int,[not i for i in offset_is_zero])))
-        comping_coord = slave_coord + (offset_as_unity * self.domain_size * -1*np.sign(coord_offset))
-        if self.compare_arrays(master_coord, comping_coord) == True:
-            return coord_offset
-        else:
-            return None
-
     def check_periodicity_face(self):
+        """Checks if master/slave faces are periodic. Primarily used for debugging"""
         for face in self.faces.values():
             if face.slaves != []:
                 for slave in face.slaves: #slave = face.slaves[0]
@@ -691,16 +669,24 @@ class PeriodicTessellation(Tessellation):
         print ('All faces still periodic')
 
     def outer_faces(self):
-        '''Returns list of faces on the perimiter of the tessellation.'''
+        """Returns list of faces on the perimeter of the tessellation."""
         #Outer faces are only part of one polyhedron
-        return [face for face in self.faces.values() if len(face.part_of) ==1]
+        #[face for face in self.faces.values() if len(face.part_of) ==1]
+        face_list = []
+        for face in self.faces.values():
+            if face.slaves != []:
+                face_list.append(face)
+                face_list.extend(face.slaves)
+        return face_list
 
     def compare_arrays(self, arr0, arr1, rel_tol=1e-09, abs_tol=1e-09):
-        '''Checks if pairwise elements of two arrays are close in value'''
-        #math.isclose might be better. Check
+        """Checks if pairwise elements of two arrays are close in value"""
         return np.all([math.isclose(a, b, rel_tol=rel_tol, abs_tol=abs_tol) for a,b in zip(arr0, arr1)])
 
     def resolve_coincident_vertices(self, vert_a, vert_b):
+        """Resolves vertices that have become coincident due to an edge deletion.
+        This happens if two vertices are periodic to each of the vertices of an edge,
+        but without an edge between them"""
         self.vertex_id_counter += 1
         new_vertex_id = self.vertex_id_counter
 
@@ -741,7 +727,7 @@ class PeriodicTessellation(Tessellation):
                     self.faces[face_id].replace_part(new_edge, old_edge)
 
             #if print_trigger == True:
-            print('Coalesced edges {},{} to edge: {}'.format(abs(old_edges[0].id_), abs(old_edges[1].id_), new_edge_id))
+            print('Coincident vertices resolved: Edges {},{} to edge: {}'.format(abs(old_edges[0].id_), abs(old_edges[1].id_), new_edge_id))
 
             # Delete all components
             del self.edges[old_edges[0].id_]
@@ -751,6 +737,7 @@ class PeriodicTessellation(Tessellation):
         return new_vertex
 
     def write_geo(self, mesh_file_name = None):
+        """Writes a .geo file for meshing with GMSH"""
         if self.mesh_file_name==None and mesh_file_name==None:
             self.mesh_file_name=self.tess_file_name
         elif self.mesh_file_name == None and mesh_file_name != None:
@@ -769,12 +756,16 @@ class PeriodicTessellation(Tessellation):
                 geo_file.write('Curve Loop ({id}) = {{'.format(id=id*10)+', '.join(map(str, face.edges))+'};\n')
                 geo_file.write('Surface ({id}) = {{{id2}}};\n'.format(id=id*10, id2=id*10))
 
+            #Writes settings from self.gmsh list of commands
             for line in self.gmsh:
                 geo_file.write(line)
             return self.mesh_file_name
 
     def mesh2D(self, elem_size, mesh_type=None, recombine=True, mesh_file_name=None,
                corner_refine_factor=2., mesh_algo=8, recomb_algo=0, second_order=False):
+        """Function for creating a meshed representation of the tessellation, using GMSH.
+        mesh_type dictates refinment of the mesh closer to edges and corners of surfaces.
+        Returns file name of mesh."""
         self.gmsh=[]
         if mesh_type==None:
             self.gmsh.append('Field[1] = MathEval;\n')
@@ -789,8 +780,6 @@ class PeriodicTessellation(Tessellation):
             self.gmsh.append('Field[2].LcMax = {};\n'.format(elem_size))
             self.gmsh.append('Field[2].DistMin = {};\n'.format(elem_size * 4))
             self.gmsh.append('Field[2].DistMax = {};\n'.format(elem_size * 8))
-            #self.gmsh.append('Field[3] = Min;\n')
-            #self.gmsh.append('Field[3].FieldsList = {2};\n')
             self.gmsh.append('Background Field = 2;\n')
             self.gmsh.append('Mesh.CharacteristicLengthExtendFromBoundary = 0;\n')
             self.gmsh.append('Mesh.CharacteristicLengthFromPoints = 0;\n')
@@ -811,15 +800,14 @@ class PeriodicTessellation(Tessellation):
 
 
 if __name__ == '__main__':
-    tess_file_name = 'tests/n10-id1.tess'
+    tess_file_name = 'tests/tess_files/n10-id1.tess'
     #tess_file_name = 'tests/tess_files/n400_from_morpho-id1.tess'
-    self = []
-    self = PeriodicTessellation(tess_file_name)
-    org_self = PeriodicTessellation(tess_file_name)
+    #tess_file_name = 'tests/tess_files/merging_vertices.tess'
+    #self = []
+    #self = PeriodicTessellation(tess_file_name)
+    #org_self = PeriodicTessellation(tess_file_name)
 
-    #for i in range(7):
-        #self.regularize(1000)
-        #self.write('tests/tess_files/temp{}'.format(i+1))
+
 
     #del_layer = 0
     #print_trigger = True
