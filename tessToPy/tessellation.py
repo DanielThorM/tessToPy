@@ -1,3 +1,5 @@
+import sys
+sys.path.insert(0, '../tessToPy/')
 import numpy as np
 import math
 import os
@@ -9,6 +11,7 @@ import copy
 import time
 import scipy.optimize
 import subprocess
+
 
 class Tessellation(object):
     def __init__(self, tess_file_name, tess_dict=None):
@@ -800,17 +803,11 @@ class PeriodicTessellation(Tessellation):
 
 
 if __name__ == '__main__':
-    tess_file_name = 'tests/tess_files/n10-id1.tess'
+    pass
+    #tess_file_name = 'tests/tess_files/n10-id1.tess'
     #tess_file_name = 'tests/tess_files/n400_from_morpho-id1.tess'
-    #tess_file_name = 'tests/tess_files/merging_vertices.tess'
     #self = []
     #self = PeriodicTessellation(tess_file_name)
-    #org_self = PeriodicTessellation(tess_file_name)
 
-
-
-    #del_layer = 0
-    #print_trigger = True
-    #old_tess = PeriodicTessellation('tests/tess_files/n400_from_morpho-id1_mod_end.tess')
 
 

@@ -221,10 +221,11 @@ def load_tess_dict(tess_dict):
 
 
 if __name__ == "__main__":
-    lines = read_tess('tests/n10-id1.tess')
-    verts = get_verts(lines)
-    edges = get_edges(lines, verts)
-    faces = get_faces(lines, edges)
-    polyhedrons = get_polyhedrons(lines, faces)
-    get_periodicity(lines, verts, edges, faces)
-    domain_size = get_domain_size(lines)
+    pass
+    #lines = read_tess('tests/n10-id1.tess')
+    #verts = get_verts(lines)
+    #dges = get_edges(lines, verts)
+    #faces = get_faces(lines, edges)
+    #polyhedrons = get_polyhedrons(lines, faces)
+    #get_periodicity(lines, verts, edges, faces)
+    #domain_size = get_domain_size(lines)

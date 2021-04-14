@@ -20,7 +20,7 @@ class TestSimpleTessellation(unittest.TestCase):
         self.assertIsNone(np.testing.assert_allclose(volume, test_volume))
 
     def test_edge_deletion(self):
-        success = self.tess_copy.delete_edge(self.edges[232])
+        success = self.tess.delete_edge(self.tess.edges[232])
         self.assertTrue(success)
 
 class TestComplexTessellation(unittest.TestCase):
