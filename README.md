@@ -17,6 +17,30 @@ This package can be installed with
 $ pip install tessToPy
 ```
 
+The tessellation is loaded as an object by
+
+```
+tess = tessToPy.PeriodicTesselation(tessellation.tess)
+```
+The tessellation is regularized by 
+
+```
+tess.regularize(n=len(tess.edges))
+```
+and can be written to a condensed .tess file by
+
+```
+tess.write(new_file_name)
+```
+
+The tessellation can also be meshed (with gmsh, must be installed), by calling
+```
+tess.mesh2D(elem_size)
+```
+where elem_size is the target length of the elements along an edge. 
+
+The file original_tessellation_processing.py is compatible with the [FoamModeling](https://github.com/DanielThorM/foamModeling) project, which has not been updated. This can be used to generate LS-DYNA input files for modeling foam structures. Please seen *Characterization and modeling of the mechanical behavior of polymer foam* by Daniel Morton for further context. 
+
 ## License
 See [LICENSE.md](https://github.com/DanielThorM/tessToPy/blob/master/LICENSE.md) for license information (MIT license).
 
