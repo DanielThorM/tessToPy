@@ -753,10 +753,11 @@ class PeriodicTessellation(Tessellation):
                 geo_file.write('Point ({id}) = {{{:.10f}, {:.10f}, {:.10f}}};\n'.format(id=id, *vert.coord))
 
             for id, edge in zip(self.edges.keys(), self.edges.values()):
-                geo_file.write('Line ({id}) = {{{}, {}}};\n'.format(id=id, *edge.verts))
+                geo_file.write('Line ({id}) = {{{}, {}}};\n'.format(id=id, *[vert.id_ for vert in edge.parts]))
 
             for id, face in zip(self.faces.keys(), self.faces.values()):
-                geo_file.write('Curve Loop ({id}) = {{'.format(id=id*10)+', '.join(map(str, face.edges))+'};\n')
+                geo_file.write('Curve Loop ({id}) = {{'.format(id=id*10)+', '.join(map(str,
+                                                                                       [edge.id_ for edge in face.parts]))+'};\n')
                 geo_file.write('Surface ({id}) = {{{id2}}};\n'.format(id=id*10, id2=id*10))
 
             #Writes settings from self.gmsh list of commands
