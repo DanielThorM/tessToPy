@@ -18,7 +18,7 @@ $ pip install tessToPy
 ```
 
 ## License
-See [LICENSE.md](LICENSE.md) for license information (MIT license).
+See [LICENSE.md](https://github.com/DanielThorM/tessToPy/blob/master/LICENSE.md) for license information (MIT license).
 
 ## Citation
 This software was used as part of the PhD thesis *Characterization and modeling of the mechanical behavior of polymer foam* by Daniel Morton, which can be used as a reference.
