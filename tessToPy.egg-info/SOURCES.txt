@@ -1,9 +1,0 @@
-LICENSE.md
-README.md
-pyproject.toml
-setup.cfg
-setup.py
-tessToPy.egg-info/PKG-INFO
-tessToPy.egg-info/SOURCES.txt
-tessToPy.egg-info/dependency_links.txt
-tessToPy.egg-info/top_level.txt
