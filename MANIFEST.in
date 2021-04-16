@@ -1,0 +1,3 @@
+graft tests
+graft tessToPy
+global-exclude *.py[cod]
