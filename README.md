@@ -6,7 +6,7 @@ A unregularized and regularized tessellation is shown below:
 
 Unregularized structure with edges to be deleted | Regularized structure with edges deleted
 ------------- | -------------
-![](https://github.com/DanielThorM/tessToPy/blob/master/documentation/p_tessellation_nreg.png?raw=true) | ![](https://github.com/DanielThorM/tessToPy/blob/master/documentation/p_tessellation_nreg.png?raw=true)
+![](https://github.com/DanielThorM/tessToPy/blob/master/documentation/p_tessellation_nreg.png?raw=true) | ![](https://github.com/DanielThorM/tessToPy/blob/master/documentation/p_tessellation_reg.png?raw=true)
 
 The effect of regularization on the edge length distribution in a 400 cell tessellation is shown  below:
 ![](https://github.com/DanielThorM/tessToPy/blob/master/documentation/p_tessellation_edge_length_dist.png?raw=true)
