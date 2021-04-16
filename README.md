@@ -10,10 +10,13 @@ A unregularized and regularized tessellation is shown below:
 |Unregularized structure with edges to be deleted | Regularized structure with edges deleted|
 
 The effect of regularization on the edge length distribution in a 400 cell tessellation is shown  below:
-![](documentation/p_tessellation_reg.png)
+![](documentation/p_tessellation_edge_length_dist.png)
 
 ## Getting started
-
+This package can be installed with 
+```
+$ pip install tessToPy
+```
 
 ## License
 See [LICENSE.md](LICENSE.md) for license information (MIT license).
